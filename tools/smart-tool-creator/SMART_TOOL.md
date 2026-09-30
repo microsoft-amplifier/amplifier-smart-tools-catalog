@@ -24,24 +24,31 @@ requires:
     purpose: >
       init creates the new tool's repository and clones its references.
     install: https://git-scm.com/
-  - name: gh
-    purpose: >
-      Generates the token that signs in to GitHub Copilot. Without it, the model-backed
-      capabilities cannot authenticate.
-    optional: true
-    install: https://cli.github.com/
-  - name: github-copilot-subscription
-    purpose: >
-      A Copilot subscription on the account signed in to gh powers the model-backed
-      capabilities. Without it, only the deterministic capabilities run.
-    optional: true
-    install: https://github.com/github/copilot-cli#prerequisites
   - name: prek
     purpose: >
       Runs the lint and format checks of the tool being extended by add-smart-capability.
       Without it that check is skipped.
     optional: true
     install: https://github.com/j178/prek
+  - name: gh
+    purpose: >
+      Generates the token that signs in to GitHub Copilot, for the copilot agent provider.
+      Without it, the model-backed capabilities cannot authenticate through copilot.
+    optional: true
+    install: https://cli.github.com/
+  - name: github-copilot-subscription
+    purpose: >
+      A Copilot subscription on the account signed in to gh powers the model-backed
+      capabilities, for the copilot agent provider.
+    optional: true
+    install: https://github.com/github/copilot-cli#prerequisites
+  - name: amplifier-agent-provider-credentials
+    purpose: >
+      The credentials of the model provider the amplifier-agent agent provider calls, for
+      instance OPENAI_API_KEY for its default model. Without them, the model-backed
+      capabilities cannot run through amplifier-agent. See the full list of options at the install link.
+    optional: true
+    install: https://github.com/microsoft/amplifier-agent/blob/v1/docs/providers.md
 ---
 
 A smart tool for building smart tools. It scaffolds the structure the
@@ -77,29 +84,48 @@ repository's `docs/01-library.md` and `docs/02-cli.md` carry the rest.
 
 ```bash
 # as a CLI
-uv tool install git+https://github.com/DavidKoleczek/amplifier-smart-tool-creator
+uv tool install "amplifier-smart-tool-creator[all] @ git+https://github.com/microsoft/amplifier-smart-tool-creator"
 
 # as a library
-uv add "amplifier-smart-tool-creator @ git+https://github.com/DavidKoleczek/amplifier-smart-tool-creator"
+uv add "amplifier-smart-tool-creator[all] @ git+https://github.com/microsoft/amplifier-smart-tool-creator"
 
 # once, without installing
-uvx --from git+https://github.com/DavidKoleczek/amplifier-smart-tool-creator smart-tool-creator --help
+uvx --from "amplifier-smart-tool-creator[all] @ git+https://github.com/microsoft/amplifier-smart-tool-creator" smart-tool-creator --help
+```
+
+`[all]` brings both agent providers the model-backed capabilities run through. Alternatives:
+
+```bash
+# Only the GitHub Copilot agent provider
+uv tool install "amplifier-smart-tool-creator[copilot] @ git+https://github.com/microsoft/amplifier-smart-tool-creator"
+# Only the Amplifier Agent agent provider
+uv tool install "amplifier-smart-tool-creator[amplifier-agent] @ git+https://github.com/microsoft/amplifier-smart-tool-creator"
+# Deterministic capabilities only
+uv tool install git+https://github.com/microsoft/amplifier-smart-tool-creator
 ```
 
 Verify with `smart-tool-creator manifest`, which needs no credentials.
 
 ## Prerequisites
 
-Deterministic capabilities need only `uv`. Model-backed capabilities run through GitHub
-Copilot, signed in as the GitHub CLI's user: `gh` must be installed and `gh auth login`
-completed with an account that has a Copilot subscription. Runs on Linux, macOS, and Windows.
+Deterministic capabilities need only `uv`. Model-backed capabilities run through an agent
+provider, picked with `--agent-provider`, or the first installed of `copilot` and
+`amplifier-agent` when omitted:
+
+- `copilot`: GitHub Copilot, signed in as the GitHub CLI's user. `gh` must be installed and
+  `gh auth login` completed with an account that has a Copilot subscription.
+- `amplifier-agent`: [Amplifier Agent](https://github.com/microsoft/amplifier-agent), calling
+  the model provider named in `--model <provider>/<model>` with that provider's credentials,
+  for instance `OPENAI_API_KEY` for the default `openai/...` models. See its
+  [providers](https://github.com/microsoft/amplifier-agent/blob/v1/docs/providers.md).
+
+Runs on Linux, macOS, and Windows.
 
 ## Straight and smart paths
 
-Deterministic capabilities run with no provider configured. Model-backed capabilities go
-through GitHub Copilot, signed in as the GitHub CLI's user, and say so in their help text.
-A model-backed capability with nothing configured fails immediately and names what to set;
-it never falls back to a deterministic answer.
+Deterministic capabilities run with no provider configured. 
+Model-backed capabilities go through GitHub Copilot or Amplifier Agent. 
+A model-backed capability with nothing configured  fails immediately.
 
 ## Output and failure contract
 
