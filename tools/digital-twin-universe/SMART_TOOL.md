@@ -1,152 +1,198 @@
 ---
 smart_tool_format: 1
-name: amplifier-digital-twin-universe
-version: 0.2.0
-description: >
-  Stands up isolated, realistic environments from a declarative profile so software
-  can be tested as though actually deployed, and manages them for their whole life:
-  author a profile, launch it, run commands inside, copy files in and out, update it,
-  and tear it down. Use when "tests pass locally" is not enough evidence and you need
-  to exercise code the way a real deployment would.
+name: digital-twin-universe
+version: 0.3.0
+description: >-
+  Stands up an isolated, realistic environment from a profile on Docker Compose so software can be cloned, installed, run, and experienced like a real user would, without touching the host. Use when passing tests on your machine is not enough evidence and code must be exercised as though actually deployed
 use_cases:
-  - Turn a description of what you want to test into a launchable environment profile
-  - Test a web app in a container that mirrors its real deployment
-  - Verify a CLI tool installs and runs cleanly from scratch
-  - Simulate an end-user environment without touching production
-  - Exercise code against mocked third-party services without changing its configuration
-  - Work out why a host cannot launch environments, and what to run to fix it
+  - Drive a CLI such as OpenAI Codex as a real user would, with its config files and API keys provisioned, without touching the local setup
+  - Run a web app against real dependencies such as Postgres and open it from the host's browser as if it were deployed
+  - Install and exercise unpublished local repositories as though they were already on GitHub
+  - Reproduce a failure in a disposable environment that leaves the host untouched
 platforms:
   - linux
+  - macos
+  - windows
 requires:
-  - name: incus
-    purpose: Runs the environments a profile describes. Without it, profiles can still be authored and validated, but nothing launches.
-    optional: true
-    install: docs/installing-incus.md
-  - name: git
-    purpose: Fetches the agent engine's modules. The model-backed capabilities cannot run without it.
-    install: https://git-scm.com/downloads
   - name: docker
-    purpose: Runs mock service sidecars beside an environment. Without it, profiles declaring sidecars cannot launch; everything else does.
+    purpose: >-
+      Every universe is a Docker Compose project. Without Docker nothing can be launched;
+      `digital-twin-universe check` reports whether it is present and usable, and `digital-twin-universe install` offers
+      to install it.
+    install: https://docs.docker.com/get-started/get-docker/
+  - name: gh
+    purpose: >-
+      Generates the token that signs in to GitHub Copilot, for the copilot agent provider.
+      Without it, the model-backed capabilities cannot authenticate through copilot.
     optional: true
-    install: docs/installing-docker.md
-  - name: avahi
-    purpose: Publishes an environment as a .local hostname. Without it, environments are still reachable at localhost on their mapped ports.
+    install: https://cli.github.com/
+  - name: github-copilot-subscription
+    purpose: >-
+      A Copilot subscription on the account signed in to gh powers the model-backed
+      capabilities, for the copilot agent provider.
     optional: true
-    install: docs/installing-incus.md
+    install: https://github.com/github/copilot-cli#prerequisites
+  - name: amplifier-agent-provider-credentials
+    purpose: >-
+      The credentials of the model provider the amplifier-agent agent provider calls, for
+      instance OPENAI_API_KEY for its default model. Without them, the model-backed
+      capabilities cannot run through amplifier-agent. See the full list of options at the install link.
+    optional: true
+    install: https://github.com/microsoft/amplifier-agent/blob/v1/docs/providers.md
 ---
 
-A Digital Twin Universe (DTU) is a complete, isolated environment stood up on demand
-from a declarative profile. It closes the gap between "the tests pass on my machine"
-and "this works where it will actually run."
+Stands up an isolated, realistic environment from a profile on Docker Compose so software can be cloned, installed, run, and experienced like a real user would, without touching the host. Use when passing tests on your machine is not enough evidence and code must be exercised as though actually deployed.
 
-**The library is the tool.** `amplifier_digital_twin_universe` holds every capability.
-The CLI is a thin wrapper over it, so anything you can do from the shell you can also
-do from Python. Confirm every capability, argument, and field name against
-`<capability> --help` or the library's own signatures before writing code. To chain
-capabilities, such as launch, exec, and destroy in one flow, or to combine them with other
-smart tools, write a script against the libraries and pass return values between calls
-rather than piping CLI output.
+**The library is the tool.** `digital_twin_universe.lib` holds every capability. The CLI is a thin
+wrapper over it, so anything you can do from the shell you can also do from Python.
 
 ## When to reach for it
 
-- What you want to verify depends on its environment: a service that must resolve real
-  hostnames, a CLI that must install from scratch, a web app whose behavior differs
-  behind a proxy.
-- You need a throwaway machine you can provision, exercise, and delete without touching
-  anything you care about.
-- A host will not launch environments and the error alone does not say why.
+- Passing tests on your machine is not enough evidence, and the code has to run against the
+  dependencies, ports, and network it is deployed with.
+- A CLI has to be driven the way a person would: `exec` opens a shell in the twin as the
+  provisioned user, with config files in place and API keys passed through from the host.
+- Something running in the twin has to be reached from the host: exposed ports are forwarded to
+  `http://localhost:<port>` and `launch` reports the URLs.
+- Local repositories are not published yet, and you want to install them over `https://` as if
+  they already were.
+- A host must stay untouched: no DNS changes, no firewall rules, no daemons beyond Docker.
 
-Not for pure logic you can test in-process. Standing up an environment costs seconds to
-minutes; a function call costs microseconds.
+## Command surfaces
+
+Deterministic commands run with no model provider configured. Today those are `check`,
+`validate-profile`, `launch`, `list`, `status`, `exec`, `file-push`, `file-pull`, `destroy`, `dashboard`, and `mcp`; the
+capability list below is authoritative. `install` is model-backed unless Docker is already usable, and
+`create-profile` is model-backed; both say so in their help text. `dashboard` serves a local web page over the same library: every universe on the machine, its
+URLs, and a destroy button, for a person rather than an agent. `mcp` serves the universe tools, and that page as an MCP App,
+to an MCP client over stdio; `dashboard` serves the same MCP server at `/mcp`.
+
+## Before writing code
+
+Run `digital-twin-universe check` first. It reports whether Docker is present and usable and exits 1 with a
+`remedy` per missing prerequisite when it is not. Use `digital-twin-universe install` to plan the fix;
+universe commands need Docker to be usable.
+Confirm every capability and argument against `digital-twin-universe <command> --help` before using it.
+Do not fill gaps from memory. The library source beside this file, `lib.py`, carries the
+signatures. The repository's `docs/01-library.md`, `docs/02-cli.md`, and `docs/03-profile.md`
+carry the rest.
+
+## A first universe
+
+A profile is a Compose file with an `x-dtu` block. `launch --profile <name>` looks for
+`.agents/digital-twin-universe/<name>/` in the project, then in the examples shipped under the
+skill directory, so the shipped ones launch by name with nothing copied:
+
+```bash
+export GH_TOKEN="$(gh auth token)"          # the profile reads it at launch, never writes it
+digital-twin-universe launch --profile copilot-cli       # prints the universe, with its id
+digital-twin-universe exec --id <id> --command 'copilot --version'
+digital-twin-universe exec --id <id>                     # interactive shell as the twin's user
+digital-twin-universe file-push --id <id> --source ./src --destination /home/user
+digital-twin-universe file-pull --id <id> --source /home/user/out.log --destination ./
+digital-twin-universe status --id <id>                   # measured now; `list` shows every universe
+digital-twin-universe destroy --id <id>
+```
+
+`examples/copilot-cli/` under the skill directory is that profile: GitHub Copilot CLI installed
+the way its README says, as a created user, signed in with the host's token. Read it before
+writing a profile of your own; `docs/03-profile.md` in the repository is the schema.
+`examples/hello/` is the smallest universe, an Alpine twin with nothing installed: launch it to
+try `exec` on a machine you have not used the tool on before. `examples/web-site/` is a site
+opened from the host's browser at the URLs its `x-dtu.urls` names; read it before writing a
+profile for a web app.
+
+Every universe launched from this machine leaves a directory under `~/.digital-twin-universe/universes/<id>/`
+until it is destroyed, and its containers keep running. Destroy what you launch.
+
+## Writing a profile
+
+`digital-twin-universe create-profile --description "<what the universe is for>" --project <repository>` has an agent
+read the project and Docker's own documentation, write the profile under
+`.agents/digital-twin-universe/<name>/`, launch it, run checks in the twin, and destroy it; the tool
+then launches it again, reruns the checks, and keeps the profile only when it passes. The result names
+the profile, the checks as the tool saw them, and one `next` step. It exits 1 on `failed` and leaves the
+draft at `<name>.draft/` for a person to finish. Add `--keep` to leave the verified universe running
+and get its id and URLs back. It costs a few minutes and a model call per attempt; for a profile you can
+write from the examples, `validate-profile` and `launch` are enough.
 
 ## Install
 
 ```bash
 # as a CLI
-uv tool install git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe
+uv tool install "digital-twin-universe[all] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe"
 
-# as a library
-uv add "amplifier-digital-twin-universe @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe"
+# as a library, from another project
+uv add "digital-twin-universe[all] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe"
+
+# once, without installing
+uvx --from "digital-twin-universe[all] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe" digital-twin-universe --help
 ```
+
+`[all]` brings both agent providers the model-backed capabilities run through. Alternatives:
+
+```bash
+# Only the GitHub Copilot agent provider
+uv tool install "digital-twin-universe[copilot] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe"
+# Only the Amplifier Agent agent provider
+uv tool install "digital-twin-universe[amplifier-agent] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe"
+# Deterministic capabilities only
+uv tool install git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe
+```
+
+Verify with `digital-twin-universe manifest`, which needs no credentials. To upgrade, run
+`uv tool upgrade digital-twin-universe`.
 
 ## Prerequisites
 
-Ask the tool rather than assuming. `check` measures this host and reports what is
-present, what is absent, and what each absence costs.
-
-`incus` runs the environments; without it nothing launches. `docker` runs mock service
-sidecars; without it everything works except profiles that declare sidecars. `git` is
-required by the model-backed capabilities. `avahi` publishes `.local` hostnames. Linux
-only. `knowledge/installing.md` covers installing each one.
-
-## Model-backed capabilities
-
-`create-profile`, `install`, `doctor`, and `manage` consume tokens, may answer
-differently on a second run, and fail saying so when no provider is configured rather
-than returning a lesser answer. Each reasons over measured evidence and takes minutes,
-up to tens of minutes for a broad request; size the timeout for that and poll rather
-than blocking on a short one. Every other capability is deterministic and runs with no
-model provider configured.
-
-## Worked invocations
+Docker is what universes are built on: `digital-twin-universe check` reports whether it is present and
+usable. `digital-twin-universe install` reads the official docs at run time and plans Docker Desktop's installer
+on Windows and macOS, or Docker's apt/dnf repositories on Linux. It only acts with `--yes`.
 
 ```bash
-# what this host can do right now, and what it is missing
-amplifier-digital-twin-universe check
-
-# ordered steps to make this host able to launch
-amplifier-digital-twin-universe install --goal "test a web service"
-
-# describe what you want to test; get a profile that parses
-amplifier-digital-twin-universe create-profile \
-  --description "a FastAPI app on port 8000 with a /health endpoint" --out profile.yaml
-
-# stand it up, exercise it, take the results out, delete it
-amplifier-digital-twin-universe launch --profile profile.yaml
-amplifier-digital-twin-universe check-readiness --id dtu-1a2b3c4d
-amplifier-digital-twin-universe exec --id dtu-1a2b3c4d --command "curl -sf localhost:8000/health"
-amplifier-digital-twin-universe file-pull --id dtu-1a2b3c4d --source /var/log/app.log --destination ./
-amplifier-digital-twin-universe destroy --id dtu-1a2b3c4d
-
-# work out what is wrong, in your own words
-amplifier-digital-twin-universe doctor --symptom "the container has no outbound network"
-
-# plan several actions from one request, then run them
-amplifier-digital-twin-universe manage --request "tear down every stopped environment"
-amplifier-digital-twin-universe manage --request "tear down every stopped environment" --confirmed
+digital-twin-universe install             # show and save a sourced plan; exits 1 for planned
+digital-twin-universe install --yes       # run that plan if the host facts still match
+# To explicitly accept Docker Desktop's terms, use the same choice on both calls:
+digital-twin-universe install --accept-license
+digital-twin-universe install --yes --accept-license
 ```
+
+The report's `outcome` is `ready`, `planned`, `installed`, `action-required`, or `failed`;
+only `ready` and `installed` exit 0, and `installed` means a universe was launched and ran on the
+new Docker, not just that `check` passes. Follow its single `next` instruction when manual action
+remains. No step prompts on stdin. Partial installation is reported, not rolled back.
+
+Deterministic capabilities need only `uv` and Docker. Model-backed capabilities run through an agent
+provider, picked with `--agent-provider`, or the first installed of `copilot` and
+`amplifier-agent` when omitted:
+
+- `copilot`: GitHub Copilot, signed in as the GitHub CLI's user. `gh` must be installed and
+  `gh auth login` completed with an account that has a Copilot subscription.
+- `amplifier-agent`: [Amplifier Agent](https://github.com/microsoft/amplifier-agent), calling
+  the model provider named in `--model <provider>/<model>` with that provider's credentials,
+  for instance `OPENAI_API_KEY` for the default `openai/...` model. See its
+  [providers](https://github.com/microsoft/amplifier-agent/blob/v1/docs/providers.md).
+
+Without an agent provider installed and configured, a model-backed capability fails immediately
+and names what to install or configure; it never falls back to a deterministic answer.
+
+Runs on Linux, macOS, and Windows. The twin is a Linux container everywhere by default; on
+Windows a profile can opt into Windows containers.
+
+## Straight and smart paths
+
+Deterministic capabilities run with no provider configured. Model-backed capabilities go
+through GitHub Copilot or Amplifier Agent, whichever `--agent-provider` names, and say so in
+their help text.
 
 ## Output and failure contract
 
-Every invocation writes exactly one JSON document to stdout. A success carries
-`result`. A failure carries `error` with a `code` to branch on, a `message`, and a
-`remedy` to act on, and exits non-zero: `2` bad invocation, `3` a model-backed
-capability with no provider configured, `4` a required prerequisite is missing, `5` the
-capability ran and failed. Never parse prose out of a failure, and never treat an empty
-result as success.
+Results go to stdout, diagnostics to stderr. A failure prints a message naming what went
+wrong and how to fix it, and exits non-zero: 1 for a failure the tool can name, 2 for a
+bad invocation. Never treat an empty result as success.
 
-## Sharp edges
+## Choosing a surface
 
-- Environments are ephemeral, and nothing reaps them. Anything worth keeping leaves
-  through `file-pull` before `destroy`, and an environment nobody destroys runs until
-  the host fills up. `launch` refuses past 15 concurrent environments; set
-  `AMPLIFIER_DTU_MAX_ENVIRONMENTS` to move the ceiling.
-- `list` is scoped to the machine, not to a session. An environment another session
-  launched appears there too, and `destroy` will take it.
-- A profile is named by path. Profile names that live inside the engine's own
-  repository do not resolve from an installed package.
-- `manage` plans without changing anything. It runs only with `--confirmed`, which
-  authorizes one invocation and nothing else. Read the plan before confirming it.
-- `install` and `doctor` propose; they never install, configure, or repair anything.
-- `exec` captures output and returns it. For an interactive shell inside an
-  environment, use the engine's own `amplifier-digital-twin exec`.
-- The model-backed capabilities send host evidence, and whatever context you pass, to
-  the model provider.
-
-## Reading more
-
-`knowledge/profile-authoring.md` is the profile schema and the rules for a profile that
-launches, for writing one by hand instead of through `create-profile`.
-`knowledge/troubleshooting.md` is symptom, cause, and remedy for the host and the
-runtime. The library, its configuration, and the full CLI surface are documented under
-`docs/` in the repository.
+Import the library from Python. Shell out to the CLI from anything that cannot import
+Python in-process: a shell script, a CI job, or an agent that can run commands but not
+load a Python object. Both reach the same capabilities.
