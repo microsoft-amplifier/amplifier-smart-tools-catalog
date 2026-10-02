@@ -1,7 +1,7 @@
 ---
 smart_tool_format: 1
 name: smart-tool-creator
-version: 0.1.0
+version: 0.1.1
 description: >
   Creates, validates, and evaluates smart tools that follow the Amplifier Smart Tool
   Spec. Use when you want to package domain expertise as a smart tool, check that an
