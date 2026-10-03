@@ -48,7 +48,7 @@ requires:
       instance OPENAI_API_KEY for its default model. Without them, the model-backed
       capabilities cannot run through amplifier-agent. See the full list of options at the install link.
     optional: true
-    install: https://github.com/microsoft/amplifier-agent/blob/v1/docs/providers.md
+    install: https://github.com/microsoft/amplifier-agent/blob/main/docs/providers.md
 ---
 
 A smart tool for building smart tools. It scaffolds the structure the
@@ -117,7 +117,7 @@ provider, picked with `--agent-provider`, or the first installed of `copilot` an
 - `amplifier-agent`: [Amplifier Agent](https://github.com/microsoft/amplifier-agent), calling
   the model provider named in `--model <provider>/<model>` with that provider's credentials,
   for instance `OPENAI_API_KEY` for the default `openai/...` models. See its
-  [providers](https://github.com/microsoft/amplifier-agent/blob/v1/docs/providers.md).
+  [providers](https://github.com/microsoft/amplifier-agent/blob/main/docs/providers.md).
 
 Runs on Linux, macOS, and Windows.
 
