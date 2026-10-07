@@ -1,7 +1,7 @@
 ---
 smart_tool_format: 1
 name: smart-tool-creator
-version: 0.1.1
+version: 0.2.1
 description: >
   Creates, validates, and evaluates smart tools that follow the Amplifier Smart Tool
   Spec. Use when you want to package domain expertise as a smart tool, check that an
@@ -49,6 +49,18 @@ requires:
       capabilities cannot run through amplifier-agent. See the full list of options at the install link.
     optional: true
     install: https://github.com/microsoft/amplifier-agent/blob/main/docs/providers.md
+  - name: codex-sign-in
+    purpose: >
+      The Codex CLI signed in with ChatGPT or an API key, for the codex agent provider.
+      Without it, the model-backed capabilities cannot run through codex.
+    optional: true
+    install: https://developers.openai.com/codex/auth
+  - name: claude-credentials
+    purpose: >
+      ANTHROPIC_API_KEY, or a cloud provider's credentials, for the claude agent provider.
+      Without them, the model-backed capabilities cannot run through claude.
+    optional: true
+    install: https://code.claude.com/docs/en/agent-sdk/quickstart
 ---
 
 A smart tool for building smart tools. It scaffolds the structure the
@@ -93,13 +105,17 @@ uv add "amplifier-smart-tool-creator[all] @ git+https://github.com/microsoft/amp
 uvx --from "amplifier-smart-tool-creator[all] @ git+https://github.com/microsoft/amplifier-smart-tool-creator" smart-tool-creator --help
 ```
 
-`[all]` brings both agent providers the model-backed capabilities run through. Alternatives:
+`[all]` brings every agent provider the model-backed capabilities run through. Alternatives:
 
 ```bash
 # Only the GitHub Copilot agent provider
 uv tool install "amplifier-smart-tool-creator[copilot] @ git+https://github.com/microsoft/amplifier-smart-tool-creator"
 # Only the Amplifier Agent agent provider
 uv tool install "amplifier-smart-tool-creator[amplifier-agent] @ git+https://github.com/microsoft/amplifier-smart-tool-creator"
+# Only the Codex agent provider
+uv tool install "amplifier-smart-tool-creator[codex] @ git+https://github.com/microsoft/amplifier-smart-tool-creator"
+# Only the Claude agent provider
+uv tool install "amplifier-smart-tool-creator[claude] @ git+https://github.com/microsoft/amplifier-smart-tool-creator"
 # Deterministic capabilities only
 uv tool install git+https://github.com/microsoft/amplifier-smart-tool-creator
 ```
@@ -109,8 +125,8 @@ Verify with `smart-tool-creator manifest`, which needs no credentials.
 ## Prerequisites
 
 Deterministic capabilities need only `uv`. Model-backed capabilities run through an agent
-provider, picked with `--agent-provider`, or the first installed of `copilot` and
-`amplifier-agent` when omitted:
+provider, picked with `--agent-provider`, or the first installed of `copilot`,
+`amplifier-agent`, `codex`, and `claude` when omitted:
 
 - `copilot`: GitHub Copilot, signed in as the GitHub CLI's user. `gh` must be installed and
   `gh auth login` completed with an account that has a Copilot subscription.
@@ -118,13 +134,20 @@ provider, picked with `--agent-provider`, or the first installed of `copilot` an
   the model provider named in `--model <provider>/<model>` with that provider's credentials,
   for instance `OPENAI_API_KEY` for the default `openai/...` models. See its
   [providers](https://github.com/microsoft/amplifier-agent/blob/main/docs/providers.md).
+- `codex`: [OpenAI Codex](https://github.com/openai/codex), with the user's Codex configuration.
+  The Codex CLI must be signed in with ChatGPT or an API key, see
+  [authentication](https://developers.openai.com/codex/auth).
+- `claude`: the [Claude Agent SDK](https://github.com/anthropics/claude-agent-sdk-python), with the
+  user's Claude Code settings. Needs `ANTHROPIC_API_KEY`, or Amazon Bedrock, Claude Platform on AWS,
+  Google Cloud's Agent Platform, or Microsoft Foundry credentials, see
+  [authentication](https://code.claude.com/docs/en/agent-sdk/quickstart).
 
 Runs on Linux, macOS, and Windows.
 
 ## Straight and smart paths
 
 Deterministic capabilities run with no provider configured. 
-Model-backed capabilities go through GitHub Copilot or Amplifier Agent. 
+Model-backed capabilities go through GitHub Copilot, Amplifier Agent, Codex, or Claude. 
 A model-backed capability with nothing configured  fails immediately.
 
 ## Output and failure contract
