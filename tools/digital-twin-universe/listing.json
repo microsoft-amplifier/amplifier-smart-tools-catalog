@@ -1,0 +1,9 @@
+{
+  "domain": "test-environments",
+  "recommended": true,
+  "reviewed_source": {
+    "repository": "https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe.git",
+    "path": ".",
+    "commit": "900583d3bc40ea8c6363a9b53c2560a0cdc98b74"
+  }
+}

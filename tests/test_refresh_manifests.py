@@ -8,7 +8,7 @@ import json
 import sys
 import tempfile
 import unittest
-from contextlib import redirect_stderr
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -40,7 +40,10 @@ class RefreshManifestsTests(unittest.TestCase):
         support = (catalog_root / "SUPPORT.md").read_text()
         workflow = (catalog_root / ".github" / "workflows" / "ci.yml").read_text()
 
-        self.assertIn("source pointers only", readme)
+        self.assertIn("optional `tools/<slug>/listing.json`", readme)
+        self.assertIn("Brian or Sam", readme)
+        self.assertIn("not certification", readme)
+        self.assertNotIn("source pointers only", readme)
         self.assertIn("generated `SMART_TOOL.md`", readme)
         self.assertIn("[Microsoft Open Source Code of Conduct](CODE_OF_CONDUCT.md)", readme)
         self.assertIn("[SECURITY.md](SECURITY.md)", readme)
@@ -64,6 +67,9 @@ This repository does not make a response-time commitment.""",
         self.assertIn("contents: read", workflow)
         self.assertIn("runs-on: ubuntu-latest", workflow)
         self.assertIn("persist-credentials: false", workflow)
+        self.assertIn("actions/setup-python@v5", workflow)
+        self.assertIn("python3 -m pip install -r site/requirements.txt", workflow)
+        self.assertIn("PYTHONDONTWRITEBYTECODE=1 python3 scripts/validate_catalog.py", workflow)
         self.assertIn("PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v", workflow)
         self.assertNotIn("refresh_manifests.py", workflow)
 
@@ -172,6 +178,10 @@ This repository does not make a response-time commitment.""",
             (entry / "source.json").write_text('{"repository": "https://example.test/tool.git"}')
             (entry / "SMART_TOOL.md").write_bytes(b"old manifest")
             (entry / "provenance.json").write_bytes(b'{"old": true}\n')
+            listing = b'{ "domain": "test-environments", "recommended": true }\r\n'
+            domains = b'{ "domains": [] }\r\n'
+            (entry / "listing.json").write_bytes(listing)
+            (root / "domains.json").write_bytes(domains)
             errors = io.StringIO()
 
             with (
@@ -187,7 +197,77 @@ This repository does not make a response-time commitment.""",
             self.assertEqual(status, 1)
             self.assertEqual((entry / "SMART_TOOL.md").read_bytes(), b"old manifest")
             self.assertEqual((entry / "provenance.json").read_bytes(), b'{"old": true}\n')
+            self.assertEqual((entry / "listing.json").read_bytes(), listing)
+            self.assertEqual((root / "domains.json").read_bytes(), domains)
             self.assertIn("ERROR tool: requested ref fetch failed", errors.getvalue())
+
+    def test_successful_refresh_preserves_editorial_files_byte_for_byte(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_name:
+            root = Path(temporary_name)
+            entry = root / "tools" / "tool"
+            entry.mkdir(parents=True)
+            pointer = b'{"repository": "https://example.test/tool.git"}\n'
+            listing = (
+                b'{ "domain": "test-environments", "recommended": true, '
+                b'"reviewed_source": {"repository": "https://example.test/tool.git", '
+                b'"path": ".", "commit": "' + b"a" * 40 + b'"} }\r\n'
+            )
+            domains = b'{ "domains": [{"id":"test-environments","label":"Tests","scope":"Testing."}] }\r\n'
+            (entry / "source.json").write_bytes(pointer)
+            (entry / "listing.json").write_bytes(listing)
+            (root / "domains.json").write_bytes(domains)
+            prepared = refresh_manifests.PreparedSnapshot(
+                b"new manifest\n",
+                json.dumps({"source": {"commit": "b" * 40}}).encode(),
+            )
+
+            with (
+                patch.object(refresh_manifests, "prepare_snapshot", return_value=prepared),
+                redirect_stdout(io.StringIO()),
+            ):
+                status = refresh_manifests.refresh(root, 1)
+
+            self.assertEqual(status, 0)
+            self.assertEqual((entry / "SMART_TOOL.md").read_bytes(), prepared.manifest)
+            self.assertEqual((entry / "provenance.json").read_bytes(), prepared.provenance)
+            self.assertEqual((entry / "source.json").read_bytes(), pointer)
+            self.assertEqual((entry / "listing.json").read_bytes(), listing)
+            self.assertEqual((root / "domains.json").read_bytes(), domains)
+
+    def test_partial_refresh_preserves_editorial_files_for_all_entries(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_name:
+            root = Path(temporary_name)
+            domains = b'{ "domains": [] }\r\n'
+            (root / "domains.json").write_bytes(domains)
+            listing = b'{ "domain": "test-environments", "recommended": false }\r\n'
+            for slug in ("first", "second"):
+                entry = root / "tools" / slug
+                entry.mkdir(parents=True)
+                (entry / "source.json").write_text('{"repository": "https://example.test/tool.git"}')
+                (entry / "listing.json").write_bytes(listing)
+                (entry / "SMART_TOOL.md").write_bytes(b"old manifest")
+                (entry / "provenance.json").write_bytes(b"old provenance")
+            prepared = refresh_manifests.PreparedSnapshot(b"new manifest", b"new provenance")
+
+            with (
+                patch.object(
+                    refresh_manifests,
+                    "prepare_snapshot",
+                    side_effect=[prepared, refresh_manifests.RefreshError("fetch failed")],
+                ),
+                redirect_stdout(io.StringIO()),
+                redirect_stderr(io.StringIO()),
+            ):
+                status = refresh_manifests.refresh(root, 1)
+
+            self.assertEqual(status, 1)
+            self.assertEqual((root / "domains.json").read_bytes(), domains)
+            for slug in ("first", "second"):
+                self.assertEqual((root / "tools" / slug / "listing.json").read_bytes(), listing)
+            self.assertEqual((root / "tools" / "first" / "SMART_TOOL.md").read_bytes(), prepared.manifest)
+            self.assertEqual((root / "tools" / "first" / "provenance.json").read_bytes(), prepared.provenance)
+            self.assertEqual((root / "tools" / "second" / "SMART_TOOL.md").read_bytes(), b"old manifest")
+            self.assertEqual((root / "tools" / "second" / "provenance.json").read_bytes(), b"old provenance")
 
     def test_refresh_returns_fatal_code_for_snapshot_output_failure(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_name:
@@ -195,6 +275,10 @@ This repository does not make a response-time commitment.""",
             entry = root / "tools" / "tool"
             entry.mkdir(parents=True)
             (entry / "source.json").write_text('{"repository": "https://example.test/tool.git"}')
+            listing = b'{ "domain": "test-environments", "recommended": false }\r\n'
+            domains = b'{ "domains": [] }\r\n'
+            (entry / "listing.json").write_bytes(listing)
+            (root / "domains.json").write_bytes(domains)
             errors = io.StringIO()
 
             with (
@@ -213,6 +297,8 @@ This repository does not make a response-time commitment.""",
                 status = refresh_manifests.refresh(root, 1)
 
             self.assertEqual(status, 2)
+            self.assertEqual((entry / "listing.json").read_bytes(), listing)
+            self.assertEqual((root / "domains.json").read_bytes(), domains)
             self.assertIn("FATAL tool: snapshot output failed", errors.getvalue())
 
     def test_cache_fetches_a_repository_ref_once(self) -> None:

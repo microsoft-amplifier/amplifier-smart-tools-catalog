@@ -2,10 +2,10 @@ name: Website
 
 on:
   pull_request:
-    paths: ['site/**', 'docs/images/**', 'tools/**', '.github/workflows/website.yml']
+    paths: ['site/**', 'docs/images/**', 'tools/**', 'domains.json', 'scripts/**', 'tests/**', '.github/workflows/website.yml']
   push:
     branches: [main]
-    paths: ['site/**', 'docs/images/**', 'tools/**', '.github/workflows/website.yml']
+    paths: ['site/**', 'docs/images/**', 'tools/**', 'domains.json', 'scripts/**', 'tests/**', '.github/workflows/website.yml']
   workflow_run:
     workflows: [Refresh Amplifier Smart Tools manifests]
     types: [completed]
@@ -13,7 +13,7 @@ on:
   workflow_dispatch:
     inputs:
       publish:
-        description: Publish this revision to GitHub Pages
+        description: Publish main to GitHub Pages (other revisions are preview-only)
         type: boolean
         default: false
       family_owner:
@@ -30,14 +30,23 @@ concurrency:
 
 jobs:
   build:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.head_repository.full_name == github.repository &&
+       github.event.workflow_run.head_branch == 'main' &&
+       (github.event.workflow_run.event == 'push' ||
+        github.event.workflow_run.event == 'schedule' ||
+        github.event.workflow_run.event == 'workflow_dispatch') &&
+       (github.event.workflow_run.conclusion == 'success' ||
+        github.event.workflow_run.conclusion == 'failure'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
           # Refresh bot commits do not trigger push workflows. Build current main
-          # after refresh, never artifacts or code supplied by the triggering run.
+          # after success OR failure: a failed refresh may commit partial updates.
+          # Never use artifacts or code supplied by the triggering run.
           ref: ${{ github.event_name == 'workflow_run' && 'main' || github.ref }}
       - uses: actions/setup-python@v5
         with:
@@ -51,12 +60,13 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
+          retention-days: 7
 
   deploy:
     if: >-
       (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
-      (github.event_name == 'workflow_dispatch' && inputs.publish)
+      (github.event_name == 'workflow_run' && needs.build.result == 'success') ||
+      (github.event_name == 'workflow_dispatch' && inputs.publish && github.ref == 'refs/heads/main')
     needs: build
     runs-on: ubuntu-latest
     permissions:

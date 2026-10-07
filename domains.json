@@ -1,0 +1,14 @@
+{
+  "domains": [
+    {
+      "id": "test-environments",
+      "label": "Test environments",
+      "scope": "Create and operate isolated environments for testing software and reproducing failures."
+    },
+    {
+      "id": "smart-tool-development",
+      "label": "Smart Tool development",
+      "scope": "Create, extend, check, and evaluate Smart Tools."
+    }
+  ]
+}

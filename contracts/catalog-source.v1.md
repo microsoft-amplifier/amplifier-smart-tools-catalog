@@ -43,14 +43,36 @@ The catalog preserves the upstream tool as the owner of its description.
    are read from that same commit. A full commit pin is honored.
 6. **Provenance is reported.** Readers identify the repository, distribution
    path, requested or default ref, and resolved commit used for the lookup.
-7. **The tool owns the manifest.** Readers follow upstream `smart-tool.json`
-   to `SMART_TOOL.md`. An entry may contain only an exact generated
-   `SMART_TOOL.md` snapshot plus provenance recording its source and refresh
-   time; it must not contain an independently written or maintained tool
-   description.
+7. **The tool owns the manifest.** Readers follow upstream `smart-tool.json` to `SMART_TOOL.md`. The only permitted copy of a tool description is an exact generated `SMART_TOOL.md` snapshot plus provenance recording its source and refresh time. Catalog-owned `listing.json` is editorial metadata, not an independently written or maintained tool description.
 8. **A failed lookup is visible.** An inaccessible repository, unresolved ref,
    or missing descriptor or manifest produces a specific blocker for that
    entry, not invented metadata or a silent switch to another source.
+
+## Optional catalog editorial metadata
+
+The inventory remains `tools/*/source.json`. Optional root `domains.json` contains `{"domains": [...]}`, with each domain recording a stable string `id`, a nonempty string `label`, and a nonempty string `scope`. IDs are unique. Domain additions, label changes, and scope changes are catalog review decisions, not upstream declarations.
+
+Optional `tools/<slug>/listing.json` records one primary approved domain and a boolean recommendation designation:
+
+```json
+{
+  "domain": "test-environments",
+  "recommended": true,
+  "reviewed_source": {
+    "repository": "https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe.git",
+    "path": ".",
+    "commit": "900583d3bc40ea8c6363a9b53c2560a0cdc98b74"
+  }
+}
+```
+
+This example records the DTU revision in the catalog's October 7 snapshot; it is not a current-health or certification claim. `domain` must identify a domain in this catalog's registry. `recommended` is a required boolean. When true, `reviewed_source` requires a credential-free HTTPS repository URL, a safe relative POSIX distribution path, and a full source commit. Repository, path, and commit are separate identity fields. An ordinary classified entry uses `recommended: false` and needs no reviewed source. Missing listing metadata means listed, unclassified, and not recommended; missing metadata preserves legacy discovery.
+
+There may be at most one recommendation designation per domain. A designation that needs review still counts. A contributor cannot create a tool-specific domain without catalog approval to evade that limit. Editorial changes require the designated approver's review, Brian or Sam, as described in the [contribution rules](../README.md#editorial-approval); documentation alone does not prove GitHub enforces those rules.
+
+Effective recommendation requires agreement between reviewed source, source pointer, and snapshot provenance on repository, distribution path, and commit. Readers honor the pointer's requested or default ref, including a full commit pin, and do not treat an obsolete pointer/provenance pairing as effective. They read registry, listing, pointer, and snapshot from one resolved catalog revision. Well-formed metadata whose identity has drifted remains valid editorial data, but displays “Recommendation needs review” and confers no recommendation preference. Malformed metadata fails validation and cannot create an endorsement.
+
+Automatic refresh writes only generated snapshot and provenance files. It must preserve `domains.json`, every `listing.json`, and reviewed commits byte for byte after successful, failed, or partially successful refresh. Renewal, withdrawal, and replacement are deliberate editorial changes, never refresh side effects. Upstream manifests and source pointers cannot grant a catalog recommendation.
 
 ## What v1 deliberately does NOT freeze
 
@@ -73,3 +95,6 @@ claim that checks have passed.
 - Generated snapshots, when present, preserve the upstream manifest bytes and
   record the repository, requested ref, distribution path, resolved commit,
   original manifest path, and successful refresh time.
+- Missing editorial metadata preserves listing and discovery; known domains and correctly typed sidecars validate through the canonical shared validator.
+- Unknown domains, malformed metadata, invalid reviewed identities, and a second recommendation designation in one domain fail validation.
+- Refresh preserves editorial files byte for byte, and source drift cannot silently renew an endorsement.
