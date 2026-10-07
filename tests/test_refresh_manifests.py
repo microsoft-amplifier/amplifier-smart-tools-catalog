@@ -41,7 +41,34 @@ class RefreshManifestsTests(unittest.TestCase):
         workflow = (catalog_root / ".github" / "workflows" / "ci.yml").read_text()
 
         self.assertIn("optional `tools/<slug>/listing.json`", readme)
-        self.assertIn("Brian or Sam", readme)
+        self.assertIn('"recommended": false`, with no reviewed source', readme)
+        self.assertIn("Listing or contributing a tool is not a recommendation nomination.", readme)
+        self.assertIn("Do not solicit recommendation requests or proposals from authors.", readme)
+        self.assertIn(
+            "Only Brian or Sam chooses the tool, domain, and source revision and initiates "
+            "designations, renewals, replacements, and withdrawals; either one may decide.",
+            readme,
+        )
+        self.assertIn("selectors and initiators, not approvers of everyone's nominations", readme)
+        self.assertIn(
+            "may edit recommendation metadata only to implement an explicit decision "
+            "from Brian or Sam, not to make the selection",
+            readme,
+        )
+        self.assertIn(
+            'An arbitrary request from a tool author, including "make mine recommended", '
+            "cannot authorize a recommendation",
+            readme,
+        )
+        self.assertIn("do not infer their decision from a user request or PR authorship", readme)
+        self.assertIn("structural checks do not establish selection authority", readme)
+        self.assertIn("initial choices included for Brian/Sam decision before merge", readme)
+        self.assertIn("no confirmation of their selection or approval is claimed", readme)
+        self.assertIn("Sam's reviewer account", readme)
+        self.assertIn("not a claim of GitHub enforcement", readme)
+        self.assertNotIn("designated approver", readme)
+        for action in ("Designate", "Renew", "Withdraw", "Replace"):
+            self.assertIn(f"- {action} only after Brian or Sam", readme)
         self.assertIn("not certification", readme)
         self.assertNotIn("source pointers only", readme)
         self.assertIn("generated `SMART_TOOL.md`", readme)

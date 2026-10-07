@@ -17,8 +17,9 @@ product behavior. Draft status is not evidence of approval or working software.
   per tool.
 - Keep tool descriptions upstream. The only permitted copies are exact generated
   `SMART_TOOL.md` snapshots with provenance; never add independent descriptions.
-- Propose tools through `source.json`; optional `listing.json` holds catalog-owned editorial data, never tool instructions. Do not hand-edit generated snapshots or provenance, or add editorial fields to source pointers.
-- Use only approved domains from `domains.json`. Domains and recommendation changes require the designated approver's review, Brian or Sam; do not assume code-owner or branch-protection enforcement has been verified.
+- Authors submit tools through `source.json` and optional ordinary `listing.json` classification with `recommended: false` and no reviewed source. Listing is not a recommendation nomination; do not solicit authors' recommendation requests or proposals. Do not hand-edit generated snapshots or provenance, or add editorial fields to source pointers.
+- Only Brian or Sam chooses the tool, domain, and source revision and initiates recommendation designations, renewals, replacements, and withdrawals; either one may decide. Contributors or agents may edit metadata only following their explicit decision, not infer authorization from "make mine recommended" or PR authorship. Record the decision, rationale, and actual evidence without inventing confirmation.
+- Use only approved domains from `domains.json`. Domain additions, label changes, and scope changes separately require Brian or Sam's review and approval. Structural validation does not establish selection authority; do not assume code-owner or branch-protection enforcement has been verified.
 - Allow at most one recommendation designation per domain, including a designation that needs review. Never let refresh renew a reviewed source or overwrite editorial files.
 - Keep metadata validation in the vendored canonical `site/theme/catalog_metadata.py`. Change the canonical theme upstream and sync it; do not duplicate its schema or validator in catalog scripts.
 - Do not introduce a top-level inventory, MCP gateway, marketplace, background

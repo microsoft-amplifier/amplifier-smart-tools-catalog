@@ -14,8 +14,8 @@ connects a small catalog to the tools' own descriptions. The person uses the sam
 in local Codex, Claude Code, GitHub Copilot CLI, and Amplifier sessions.
 Host permissions and execution environments remain visible differences.
 
-Catalog maintainers contribute a source pointer in a folder for each tool.
-The pointer identifies a repository, a revision, and a location inside it.
+Contributors submit a source pointer in a folder for each tool, optionally with ordinary classification using an approved domain, `recommended: false`, and no reviewed source. Listing or contributing is not a recommendation nomination.
+The pointer identifies a repository, a revision, and a location inside it. Recommendation curation is separate: only Brian or Sam chooses the tool, domain, and source revision and initiates designations, renewals, replacements, and withdrawals; either one may decide. Contributors or agents may implement their explicit decision, not solicit authors' recommendation requests or infer authority from them. Domain additions and scope changes separately require their review and approval.
 Tool authors own the manifest that explains when to select their tool and the
 help that explains how to invoke it.
 
@@ -75,3 +75,4 @@ person's environment. The host's authorization rules remain in force.
 ## Changelog
 
 - First draft from the reviewed catalog design and the steward's decisions.
+- 2026-10-07: Correct the process to reserve recommendation selection and initiation for Brian or Sam, rather than treating them as approvers of authors' nominations.

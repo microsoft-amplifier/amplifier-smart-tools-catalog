@@ -41,14 +41,16 @@ source refreshes preserve the previous snapshot and appear in the action logs.
 
 The catalog owns the approved work domains in [`domains.json`](domains.json). Optional `tools/<slug>/listing.json` files classify an entry and record a recommendation for a reviewed source revision. Missing listing metadata means listed, not yet classified, and not recommended. Ordinary listings remain available; they are not rejected or unapproved.
 
-| Domain | Scope | Recommended tool |
+| Domain | Scope | Initial choice for Brian/Sam decision |
 |---|---|---|
 | Test environments | Create and operate isolated environments for testing software and reproducing failures. | Digital Twin Universe |
 | Smart Tool development | Create, extend, check, and evaluate Smart Tools. | Smart Tool Creator |
 
+Digital Twin Universe and Smart Tool Creator are the initial choices included for Brian/Sam decision before merge; no confirmation of their selection or approval is claimed. Their existing true designations and recorded source revisions remain in the unmerged seed metadata.
+
 “Recommended” is a catalog editorial decision, not certification, proof of professional-quality outcomes, or a claim that the tool is installed or ready on this machine. It does not authorize installation, execution, spending, or access to secrets. The tool's own manifest still determines whether it fits the request.
 
-A recommendation is effective only when its reviewed repository, distribution path, and commit agree with the source pointer and snapshot provenance. When they no longer agree, the entry keeps its domain and designation but shows “Recommendation needs review” instead of an effective recommendation. It loses recommendation preference until maintainers review it again. A stale designation still occupies the domain's one recommendation slot. Refresh time and recorded revision are evidence of a past snapshot, not current tool health.
+A recommendation is effective only when its reviewed repository, distribution path, and commit agree with the source pointer and snapshot provenance. When they no longer agree, the entry keeps its domain and designation but shows “Recommendation needs review” instead of an effective recommendation. It loses recommendation preference until Brian or Sam explicitly selects a revision and initiates renewal. A stale designation still occupies the domain's one recommendation slot. Refresh time and recorded revision are evidence of a past snapshot, not current tool health. A badge describes recorded editorial metadata, not proof that Brian or Sam made the selection.
 
 ## Product direction
 
@@ -58,18 +60,20 @@ A recommendation is effective only when its reviewed repository, distribution pa
 
 ## Contributing
 
-To propose a tool, add or update `tools/<slug>/source.json`. You may also propose optional `tools/<slug>/listing.json` classification using an existing approved domain and `"recommended": false`. Do not hand-copy or hand-edit generated `SMART_TOOL.md` or `provenance.json` files. After a source pointer merges to `main`, the refresh workflow generates snapshots and provenance. Never add classification or recommendation fields to `source.json` or upstream manifests.
+To list a tool, add or update `tools/<slug>/source.json`. You may also submit optional `tools/<slug>/listing.json` classification using an existing approved domain and `"recommended": false`, with no reviewed source. Listing or contributing a tool is not a recommendation nomination. Do not solicit recommendation requests or proposals from authors. Do not hand-copy or hand-edit generated `SMART_TOOL.md` or `provenance.json` files. After a source pointer merges to `main`, the refresh workflow generates snapshots and provenance. Never add classification or recommendation fields to `source.json` or upstream manifests.
 
 ### Editorial approval
 
-Changes to domains or recommendations require review and approval from the designated approver, Brian or Sam, before merging. Name that approver in the pull request and describe the domain, source identity, and reason for the decision. Tool authors may propose an entry or classification; upstream content cannot award itself the catalog's recommendation.
+Only Brian or Sam chooses the tool, domain, and source revision and initiates designations, renewals, replacements, and withdrawals; either one may decide. They are selectors and initiators, not approvers of everyone's nominations. A contributor or agent may edit recommendation metadata only to implement an explicit decision from Brian or Sam, not to make the selection. An arbitrary request from a tool author, including "make mine recommended", cannot authorize a recommendation; do not infer their decision from a user request or PR authorship. Record who decided, the selected domain and exact source identity, the rationale, and actual evidence in the pull request before merge. Do not invent evaluation evidence or confirmation.
 
-- Propose a new domain by changing `domains.json` through review. A listing cannot invent a private domain to bypass the limit. Keep identifiers stable when labels change; changes to scope require editorial approval.
-- Renew a recommendation by reviewing the selected source revision and updating `reviewed_source` to its exact repository, distribution path, and full commit. Do not move the reviewed commit automatically or fabricate evaluation evidence.
-- Withdraw a recommendation by setting `recommended` to false and removing its reviewed source. Keep the ordinary classified listing unless its removal is separately justified.
-- Replace a recommendation by withdrawing the old designation and adding the new one in the same change. There may be at most one `recommended: true` designation per domain, including ones that need review.
+Domain additions, label changes, and scope changes separately require review and approval from Brian or Sam before merge. A listing cannot invent a private domain to bypass the limit. Keep identifiers stable when labels change.
 
-[Brian's public account](https://github.com/bkrabach) is identified in the [catalog's public contributor records](https://api.github.com/repos/microsoft/amplifier-smart-tools-catalog/contributors). Sam's reviewer account and the required repository permissions, code-owner review rules, and branch protection have not been verified. This approval policy is not a claim of GitHub enforcement. Maintainers must verify the reviewer accounts and protection settings before relying on automated enforcement; do not guess a `CODEOWNERS` identity or change repository settings as part of a listing contribution.
+- Designate only after Brian or Sam selects the tool, domain, and reviewed revision and initiates the designation; record `recommended: true` and its exact `reviewed_source`.
+- Renew only after Brian or Sam selects the reviewed source revision and initiates renewal; update `reviewed_source` to its exact repository, distribution path, and full commit. Do not move the reviewed commit automatically.
+- Withdraw only after Brian or Sam initiates withdrawal; set `recommended` to false and remove its reviewed source. Keep the ordinary classified listing unless its removal is separately justified.
+- Replace only after Brian or Sam selects the replacement and its reviewed revision and initiates replacement; withdraw the old designation and add the new one in the same change. There may be at most one `recommended: true` designation per domain, including ones that need review.
+
+The optional true format and structural checks do not establish selection authority. [Brian's public account](https://github.com/bkrabach) is identified in the [catalog's public contributor records](https://api.github.com/repos/microsoft/amplifier-smart-tools-catalog/contributors). Sam's reviewer account and the required repository permissions, code-owner review rules, and branch protection have not been verified. This selection and initiation policy is not a claim of GitHub enforcement. Maintainers must verify the reviewer accounts and protection settings before relying on automated enforcement; do not guess a `CODEOWNERS` identity or change repository settings as part of a listing contribution.
 
 ### Check a contribution
 
@@ -80,7 +84,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 scripts/validate_catalog.py
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
 ```
 
-The CLI and website build use the same validator in the versioned canonical theme. Do not add a separate schema or a second implementation here. Metadata validation does not evaluate tool quality or prove the approval policy has been enforced.
+The CLI and website build use the same validator in the versioned canonical theme. Do not add a separate schema or a second implementation here. Metadata validation does not evaluate tool quality or prove the selection and initiation policy has been enforced.
 
 ### Review a website preview
 
