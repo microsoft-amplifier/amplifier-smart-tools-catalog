@@ -9,6 +9,41 @@
       "id": "smart-tool-development",
       "label": "Smart Tool development",
       "scope": "Create, extend, check, and evaluate Smart Tools."
+    },
+    {
+      "id": "research-knowledge",
+      "label": "Research & knowledge",
+      "scope": "Find sourced answers, check claims, explore documentation and news, and retrieve team knowledge."
+    },
+    {
+      "id": "media-production",
+      "label": "Audio, video & animation",
+      "scope": "Record demonstrations, edit recordings, extract clips, and produce motion graphics."
+    },
+    {
+      "id": "presentations-documents",
+      "label": "Presentations & documents",
+      "scope": "Turn evidence into presentations or documents and review the resulting communication."
+    },
+    {
+      "id": "developer-tools",
+      "label": "App design & developer tools",
+      "scope": "Prototype app experiences, discover and manage repositories, and manage coding sessions and terminals."
+    },
+    {
+      "id": "workplace-productivity",
+      "label": "Email, calendar & work preparation",
+      "scope": "Handle messages, contacts, schedules, meeting preparation, and workplace briefings."
+    },
+    {
+      "id": "music-listening",
+      "label": "Music & playlists",
+      "scope": "Find music, curate playlists, inspect listening libraries and devices, and control playback."
+    },
+    {
+      "id": "home-automation",
+      "label": "Smart home",
+      "scope": "Inspect household devices and operate explicitly authorized home services."
     }
   ]
 }

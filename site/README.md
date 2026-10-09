@@ -71,6 +71,14 @@ primary `category`. Keep category IDs stable and expose labels and scopes withou
 turning categories into a hierarchy. Ordinary and not-yet-classified listings
 remain available.
 
+The current data classifies all 22 tools across nine categories, with zero
+unclassified tools and zero effective recommendations. The seven category
+additions and ordinary assignments are proposed for maintainer review, not
+already approved. See the root [category table](../README.md#categories-and-recommendations)
+for coverage; category scopes remain in `categories.json`. Missing classification
+is still valid for future source-pointer contributions, not an expected gap in
+the current 22-tool inventory.
+
 Explain “Recommended” as a maintainer-selected tool for a category at an exact
 reviewed source revision after conformance review and representative task
 scenarios under the [maintainer guide](../docs/maintainers.md). It is not

@@ -39,12 +39,23 @@ source refreshes preserve the previous snapshot and appear in the action logs.
 
 ### Categories and recommendations
 
-The catalog owns a flat set of approved categories in [`categories.json`](categories.json), with stable IDs, labels, and scopes. Optional `tools/<slug>/listing.json` files assign at most one primary category and record a recommendation for a reviewed source revision. Missing listing metadata means listed, not yet classified, and not recommended. Ordinary listings remain available; they are not rejected or unapproved.
+The catalog owns a flat category registry in [`categories.json`](categories.json), with stable IDs, labels, and scopes. Optional `tools/<slug>/listing.json` files assign at most one primary category and record a recommendation for a reviewed source revision. Missing listing metadata means listed, not yet classified, and not recommended. Ordinary listings remain available; they are not rejected or unapproved.
 
-| Category | Scope | Initial choice pending maintainer review |
-|---|---|---|
-| Test environments | Create and operate isolated environments for testing software and reproducing failures. | Digital Twin Universe |
-| Smart Tool development | Create, extend, check, and evaluate Smart Tools. | Smart Tool Creator |
+This change proposes seven additional categories and ordinary classifications based on the work described in the exact, commit-pinned public manifests, not repository names. The two existing category labels and scopes are unchanged. The additions and assignments require maintainer review before merge; this proposal does not claim that approval has occurred.
+
+All 22 current tools are classified across these nine categories: zero are unclassified and zero are Recommended. Classification is not a completed recommendation evaluation. Future source-pointer contributions may still omit classification while their category is considered.
+
+| Category | Tools | Current listings |
+|---|---:|---|
+| Test environments | 1 | `digital-twin-universe` |
+| Smart Tool development | 1 | `smart-tool-creator` |
+| Research & knowledge | 5 | `deep-research`, `fact-check`, `hacker-news`, `lore`, `team-pulse` |
+| Audio, video & animation | 5 | `aud`, `vid`, `outtake`, `unfold`, `showrun` |
+| Presentations & documents | 1 | `stories` |
+| App design & developer tools | 4 | `possibly`, `fast-decisions`, `github-repos`, `tmux` |
+| Email, calendar & work preparation | 2 | `gmail`, `workiq` |
+| Music & playlists | 2 | `music-deck`, `spotify` |
+| Smart home | 1 | `home-assistant` |
 
 Digital Twin Universe and Smart Tool Creator are initial choices pending recorded review evidence. Both remain ordinary classified listings with `recommended: false` and no `reviewed_source`; no completed review or approval is claimed. This records missing review evidence, not a tool failure or negative quality judgment. Maintainers must agree evaluation criteria, select the tool and revision, and complete the [required review standard](docs/maintainers.md#required-review-standard) before promotion.
 

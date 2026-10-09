@@ -1,4 +1,4 @@
-"""Exercise the canonical validator against catalog fixtures and real seed data."""
+"""Exercise the canonical validator against catalog fixtures and real classifications."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ import json
 import sys
 import tempfile
 import unittest
+from collections import Counter
 from contextlib import redirect_stderr, redirect_stdout
 from html.parser import HTMLParser
 from pathlib import Path
@@ -47,6 +48,20 @@ PINNED_FIXTURE_SOURCES = {
     },
 }
 
+# These 22 manifest-based assignments cover the current classification proposal.
+# New sources may remain unclassified: this is not a mandatory-listing schema.
+CURRENT_CLASSIFICATIONS = {
+    "test-environments": ("digital-twin-universe",),
+    "smart-tool-development": ("smart-tool-creator",),
+    "research-knowledge": ("deep-research", "fact-check", "hacker-news", "lore", "team-pulse"),
+    "media-production": ("aud", "vid", "outtake", "unfold", "showrun"),
+    "presentations-documents": ("stories",),
+    "developer-tools": ("possibly", "fast-decisions", "github-repos", "tmux"),
+    "workplace-productivity": ("gmail", "workiq"),
+    "music-listening": ("music-deck", "spotify"),
+    "home-automation": ("home-assistant",),
+}
+
 
 def write_json(path: Path, value: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -64,14 +79,16 @@ class CatalogCards(HTMLParser):
         self.labels: dict[str, str] = {}
         self.label_target: str | None = None
         self.elements: list[tuple[str, dict[str, str | None]]] = []
+        self.text_runs: list[tuple[str, list[tuple[str, dict[str, str | None]]]]] = []
+        self.card_ancestors: dict[str, list[tuple[str, dict[str, str | None]]]] = {}
         self.guide_heading: dict[str, object] | None = None
         self.in_guide_heading = False
         self.feed(document)
 
     def handle_starttag(self, tag: str, attributes: list[tuple[str, str | None]]) -> None:
         attrs = dict(attributes)
-        if tag == "h2" and attrs.get("id") == "recommendation-guide-title":
-            self.guide_heading = {"attrs": attrs, "ancestors": list(self.elements), "text": ""}
+        if tag in ("h2", "h3") and attrs.get("id") == "recommendation-guide-title":
+            self.guide_heading = {"tag": tag, "attrs": attrs, "ancestors": list(self.elements), "text": ""}
             self.in_guide_heading = True
         if tag not in ("area", "base", "br", "col", "embed", "hr", "img", "input",
                        "link", "meta", "param", "source", "track", "wbr"):
@@ -85,13 +102,14 @@ class CatalogCards(HTMLParser):
         if tag == "article" and attrs.get("class") == "catalog-card":
             self.card = {"slug": attrs["data-tool"], "category": attrs.get("data-category"), "badges": []}
             self.cards.append(self.card)
+            self.card_ancestors[attrs["data-tool"]] = list(self.elements[:-1])
         elif tag in ("span", "summary") and self.card is not None:
             classes = (attrs.get("class") or "").split()
             if "recommendation" in classes:
                 self.card["badges"].append(classes)
 
     def handle_endtag(self, tag: str) -> None:
-        if tag == "h2":
+        if tag in ("h2", "h3"):
             self.in_guide_heading = False
         for index in range(len(self.elements) - 1, -1, -1):
             if self.elements[index][0] == tag:
@@ -103,6 +121,7 @@ class CatalogCards(HTMLParser):
             self.label_target = None
 
     def handle_data(self, data: str) -> None:
+        self.text_runs.append((data, list(self.elements)))
         if self.in_guide_heading and self.guide_heading is not None:
             self.guide_heading["text"] += data
         if self.label_target:
@@ -306,7 +325,7 @@ class CatalogMetadataTests(unittest.TestCase):
         self.assertEqual(registry_file.read_bytes(), registry_before)
         self.assertNotEqual(old_review, before)
 
-    def test_real_initial_choices_are_classified_without_reviewed_sources(self) -> None:
+    def test_current_22_tools_have_exact_classifications_without_reviewed_sources(self) -> None:
         expected_categories = {
             "test-environments": (
                 "Test environments",
@@ -316,27 +335,70 @@ class CatalogMetadataTests(unittest.TestCase):
                 "Smart Tool development",
                 "Create, extend, check, and evaluate Smart Tools.",
             ),
+            "research-knowledge": (
+                "Research & knowledge",
+                "Find sourced answers, check claims, explore documentation and news, and retrieve team knowledge.",
+            ),
+            "media-production": (
+                "Audio, video & animation",
+                "Record demonstrations, edit recordings, extract clips, and produce motion graphics.",
+            ),
+            "presentations-documents": (
+                "Presentations & documents",
+                "Turn evidence into presentations or documents and review the resulting communication.",
+            ),
+            "developer-tools": (
+                "App design & developer tools",
+                "Prototype app experiences, discover and manage repositories, and manage coding sessions and terminals.",
+            ),
+            "workplace-productivity": (
+                "Email, calendar & work preparation",
+                "Handle messages, contacts, schedules, meeting preparation, and workplace briefings.",
+            ),
+            "music-listening": (
+                "Music & playlists",
+                "Find music, curate playlists, inspect listening libraries and devices, and control playback.",
+            ),
+            "home-automation": (
+                "Smart home",
+                "Inspect household devices and operate explicitly authorized home services.",
+            ),
         }
         registry = json.loads((ROOT / "categories.json").read_text())
         self.assertEqual(
             {category["id"]: (category["label"], category["scope"]) for category in registry["categories"]},
             expected_categories,
         )
-        seeds = {
-            "digital-twin-universe": "test-environments",
-            "smart-tool-creator": "smart-tool-development",
+        expected_assignments = {
+            slug: category
+            for category, slugs in CURRENT_CLASSIFICATIONS.items()
+            for slug in slugs
         }
-        for slug, category in seeds.items():
-            entry = ROOT / "tools" / slug
-            listing = json.loads((entry / "listing.json").read_text())
-            self.assertEqual(listing, {"category": category, "recommended": False})
-            self.assertNotIn("reviewed_source", listing)
-        self.assertEqual(len(list(ROOT.glob("tools/*/listing.json"))), 2)
+        self.assertEqual(len(expected_assignments), 22)
         categories, listings = load_catalog_metadata(ROOT)
         self.assertEqual(set(categories), set(expected_categories))
-        self.assertEqual(set(listings), set(seeds))
+        sources = {source.parent.name for source in catalog_sources(ROOT)}
+        self.assertLessEqual(set(expected_assignments), sources)
+        for slug, category in expected_assignments.items():
+            with self.subTest(tool=slug):
+                self.assertEqual(listings.get(slug), {"category": category, "recommended": False})
+        counts = Counter(listings[slug]["category"] for slug in expected_assignments)
+        self.assertEqual(
+            counts,
+            {
+                "test-environments": 1,
+                "smart-tool-development": 1,
+                "research-knowledge": 5,
+                "media-production": 5,
+                "presentations-documents": 1,
+                "developer-tools": 4,
+                "workplace-productivity": 2,
+                "music-listening": 2,
+                "home-automation": 1,
+            },
+        )
 
-    def test_real_seeds_remain_valid_metadata_after_snapshot_refresh(self) -> None:
+    def test_real_classifications_remain_valid_metadata_after_snapshot_refresh(self) -> None:
         seed_root = self.root / "seeds"
         write_json(seed_root / "categories.json", json.loads((ROOT / "categories.json").read_text()))
         for entry in ROOT.glob("tools/*/listing.json"):
@@ -432,9 +494,10 @@ class CatalogMetadataTests(unittest.TestCase):
         write_json(provenance_path, provenance)
         after = rendered_catalog(self.root)
         cards = CatalogCards(after).cards
-        self.assertEqual([card["slug"] for card in cards], ["a-ordinary", "tool"])
-        self.assertEqual(cards[1]["category"], CATEGORY["id"])
-        self.assertEqual(cards[1]["badges"], [["recommendation", "needs-review"]])
+        by_slug = {card["slug"]: card for card in cards}
+        self.assertEqual(set(by_slug), {"a-ordinary", "tool"})
+        self.assertEqual(by_slug["tool"]["category"], CATEGORY["id"])
+        self.assertEqual(by_slug["tool"]["badges"], [["recommendation", "needs-review"]])
         self.assertNotIn('class="recommendation recommended"', after)
         self.assertIn("Recommendation needs review", after)
         self.assertIn("No recommendation preference applies.", after)
@@ -456,25 +519,44 @@ class CatalogMetadataTests(unittest.TestCase):
         self.assertIn('<summary class="recommendation recommended">Recommended</summary>', document)
         self.assertIn(f'<code>{IDENTITY["commit"]}</code>', document)
         self.assertIn("Not certification or proof of host readiness.", document)
-        heading = CatalogCards(document).guide_heading
+        parsed = CatalogCards(document)
+        heading = parsed.guide_heading
         self.assertIsNotNone(heading)
         self.assertEqual(heading["text"].strip(), "What does Recommended mean?")
         self.assertTrue(any(
             tag == "section" and attrs.get("aria-labelledby") == "recommendation-guide-title"
             for tag, attrs in heading["ancestors"]
         ))
-        for tag, attrs in [*heading["ancestors"], ("h2", heading["attrs"])]:
-            self.assertNotEqual(tag, "details", "The guide must be outside disclosures.")
-            self.assertNotIn("hidden", attrs)
-            self.assertNotEqual(attrs.get("aria-hidden"), "true")
+        self.assertTrue(any(
+            tag == "section" and attrs.get("id") == "recommended-region"
+            and attrs.get("aria-labelledby") == "recommended-heading"
+            for tag, attrs in heading["ancestors"]
+        ))
+        guide_runs = [
+            (text, ancestors) for text, ancestors in parsed.text_runs
+            if any(tag == "section" and attrs.get("aria-labelledby") == "recommendation-guide-title"
+                   for tag, attrs in ancestors)
+        ]
+        for _, ancestors in guide_runs:
+            for tag, attrs in ancestors:
+                self.assertNotEqual(tag, "details", "Consumer context must be outside disclosures.")
+                self.assertNotIn("hidden", attrs)
+                self.assertNotEqual(attrs.get("aria-hidden"), "true")
+        context = " ".join(" ".join(text for text, _ in guide_runs).split())
         for explanation in (
-            "specification conformance, representative-task evidence, and documented limitations",
-            "Compare documented capabilities, platform support, and prerequisites with your task first.",
-            "Recommended is a preference among suitable options, not an override; consider suitable alternatives.",
-            "Unclassified or undesignated tools are not a negative quality judgment.",
-            "“Recommended only” is optional and starts unchecked, so all tools remain visible by default.",
+            "Maintainers designate a starting point",
+            "checking specification conformance",
+            "documenting representative-task evidence and limitations at a recorded source revision",
+            "not certification, a quality guarantee, or proof of readiness in your environment",
+            "Compare documented capabilities, platforms, and prerequisites with your task",
+            "suitable alternatives remain available",
+            "A missing designation means no current recommendation is recorded, not a negative quality judgment",
         ):
-            self.assertIn(explanation, document)
+            self.assertIn(explanation, context)
+        self.assertTrue(any(
+            tag == "section" and attrs.get("id") == "recommended-region"
+            for tag, attrs in parsed.card_ancestors["tool"]
+        ))
 
     def test_pinned_fixture_renders_two_recommended_first_and_twenty_unclassified(self) -> None:
         # Fake-reviewed metadata in isolated fixtures exercises rendering only.
@@ -504,28 +586,32 @@ class CatalogMetadataTests(unittest.TestCase):
                 },
             )
             (entry / "SMART_TOOL.md").write_bytes(manifest_bytes)
-        for index in range(20):
+        unclassified_slugs = [f"a-unclassified-{index:02d}" for index in range(20)]
+        for slug in unclassified_slugs:
             write_json(
-                pinned / "tools" / f"a-unclassified-{index:02d}" / "source.json",
+                pinned / "tools" / slug / "source.json",
                 {"repository": IDENTITY["repository"]},
             )
         document = rendered_catalog(pinned)
         cards = CatalogCards(document).cards
-        self.assertEqual(len(cards), 22)
-        self.assertEqual([card["slug"] for card in cards[:2]], ["digital-twin-universe", "smart-tool-creator"])
+        self.assertEqual(len(cards), len(catalog_sources(pinned)))
+        self.assertEqual({card["slug"] for card in cards[:len(fixture_categories)]}, set(fixture_categories))
         self.assertEqual(
-            [card["slug"] for card in cards if ["recommendation", "recommended"] in card["badges"]],
-            ["digital-twin-universe", "smart-tool-creator"],
+            {card["slug"] for card in cards if ["recommendation", "recommended"] in card["badges"]},
+            set(fixture_categories),
         )
-        self.assertEqual(sum(card["category"] == "" for card in cards), 20)
+        self.assertEqual(
+            {card["slug"] for card in cards if card["category"] == ""},
+            set(unclassified_slugs),
+        )
         self.assertIn('value="__unclassified__">Not yet classified', document)
-        self.assertIn("22 tools", document)
+        self.assertIn(f"{len(cards)} tools", document)
         self.assertIn(CATEGORY["label"], document)
         self.assertIn("Smart Tool development", document)
-        self.assertEqual(document.count('data-recommended="true"'), 2)
-        self.assertEqual(document.count('data-recommended="false"'), 20)
+        self.assertEqual(document.count('data-recommended="true"'), len(fixture_categories))
+        self.assertEqual(document.count('data-recommended="false"'), len(unclassified_slugs))
 
-    def test_real_catalog_renders_recorded_states_and_order_including_drift(self) -> None:
+    def test_real_catalog_renders_recorded_states_including_drift(self) -> None:
         # Refresh may advance live snapshots without renewing editorial review.
         # Derive expected badges and preference from the shared identity helper.
         categories, listings = load_catalog_metadata(ROOT)
@@ -548,14 +634,41 @@ class CatalogMetadataTests(unittest.TestCase):
                 )
             )
         document = rendered_catalog(ROOT)
-        cards = CatalogCards(document).cards
-        self.assertEqual(cards, [card for _, _, card in sorted(expected)])
+        parsed = CatalogCards(document)
+        cards = parsed.cards
+        # Category grouping may change ordinary order without changing discovery.
+        self.assertEqual(
+            sorted(cards, key=lambda card: card["slug"]),
+            sorted((card for _, _, card in expected), key=lambda card: card["slug"]),
+        )
+        recommended_slugs = {slug for ordinary, slug, _ in expected if not ordinary}
+        self.assertEqual({card["slug"] for card in cards[:len(recommended_slugs)]}, recommended_slugs)
         self.assertIn(f"{len(expected)} tools", document)
-        self.assertEqual(len(cards), 22)
-        self.assertEqual(sum(bool(card["category"]) for card in cards), 2)
-        self.assertEqual(sum(card["category"] == "" for card in cards), 20)
+        self.assertEqual(len(cards), len(expected))
+        self.assertEqual(sum(bool(card["category"]) for card in cards), len(listings))
+        self.assertEqual(sum(card["category"] == "" for card in cards), len(expected) - len(listings))
         self.assertTrue(all(not card["badges"] for card in cards))
         self.assertNotIn('data-recommended="true"', document)
+        tiles: dict[str, str] = {}
+        for text, ancestors in parsed.text_runs:
+            for tag, attrs in ancestors:
+                if tag == "button" and attrs.get("data-category-filter"):
+                    identity = attrs["data-category-filter"]
+                    tiles[identity] = tiles.get(identity, "") + text
+        self.assertEqual(set(tiles), set(categories))
+        for identity, category in categories.items():
+            self.assertIn(category["label"], tiles[identity])
+            self.assertIn(category["scope"], tiles[identity])
+        for card in cards:
+            ancestors = parsed.card_ancestors[card["slug"]]
+            self.assertTrue(any(
+                tag == "section" and attrs.get("id") == "other-tools"
+                for tag, attrs in ancestors
+            ))
+            self.assertTrue(any(
+                tag == "section" and attrs.get("data-category-group") == (card["category"] or "__unclassified__")
+                for tag, attrs in ancestors
+            ))
 
 
 if __name__ == "__main__":
