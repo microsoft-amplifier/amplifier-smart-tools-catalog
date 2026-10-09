@@ -71,6 +71,8 @@ primary `category`. Keep category IDs stable and expose labels and scopes withou
 turning categories into a hierarchy. Ordinary and not-yet-classified listings
 remain available.
 
+Each card shows its “Category: {label}” prefix and explicit recommendation state. Ordinary listings show “Not currently recommended”; cards without listings show “Category: Not yet classified” with the same neutral status. Effective recommendations and designations needing review retain their existing explicit labels.
+
 The current data classifies all 22 tools across nine categories, with zero
 unclassified tools and zero effective recommendations. The seven category
 additions and ordinary assignments are proposed for maintainer review, not

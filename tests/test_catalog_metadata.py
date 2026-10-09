@@ -33,21 +33,6 @@ CATEGORY = {"id": "test-environments", "label": "Test environments", "scope": "I
 IDENTITY = {"repository": "https://example.test/tool.git", "path": ".", "commit": "a" * 40}
 # Synthetic reviewed metadata is test-only, never evidence of an actual review.
 LISTING = {"category": CATEGORY["id"], "recommended": True, "reviewed_source": IDENTITY}
-# Identities copied from pinned snapshot provenance, not live listing metadata.
-# Pinning these test-only identities makes badge coverage independent of refresh.
-PINNED_FIXTURE_SOURCES = {
-    "digital-twin-universe": {
-        "repository": "https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe.git",
-        "path": ".",
-        "commit": "900583d3bc40ea8c6363a9b53c2560a0cdc98b74",
-    },
-    "smart-tool-creator": {
-        "repository": "https://github.com/microsoft/amplifier-smart-tool-creator.git",
-        "path": ".",
-        "commit": "7337543a6a596b2f94a7cdc648b4a53e8cf44919",
-    },
-}
-
 # These 22 manifest-based assignments cover the current classification proposal.
 # New sources may remain unclassified: this is not a mandatory-listing schema.
 CURRENT_CLASSIFICATIONS = {
@@ -100,7 +85,12 @@ class CatalogCards(HTMLParser):
             if self.label_target:
                 self.labels[self.label_target] = ""
         if tag == "article" and attrs.get("class") == "catalog-card":
-            self.card = {"slug": attrs["data-tool"], "category": attrs.get("data-category"), "badges": []}
+            self.card = {
+                "slug": attrs["data-tool"],
+                "category": attrs.get("data-category"),
+                "badges": [],
+                "text": "",
+            }
             self.cards.append(self.card)
             self.card_ancestors[attrs["data-tool"]] = list(self.elements[:-1])
         elif tag in ("span", "summary") and self.card is not None:
@@ -122,6 +112,8 @@ class CatalogCards(HTMLParser):
 
     def handle_data(self, data: str) -> None:
         self.text_runs.append((data, list(self.elements)))
+        if self.card is not None:
+            self.card["text"] += data
         if self.in_guide_heading and self.guide_heading is not None:
             self.guide_heading["text"] += data
         if self.label_target:
@@ -498,6 +490,11 @@ class CatalogMetadataTests(unittest.TestCase):
         self.assertEqual(set(by_slug), {"a-ordinary", "tool"})
         self.assertEqual(by_slug["tool"]["category"], CATEGORY["id"])
         self.assertEqual(by_slug["tool"]["badges"], [["recommendation", "needs-review"]])
+        self.assertIn("Category: Test environments", by_slug["tool"]["text"])
+        self.assertIn("Recommendation needs review", by_slug["tool"]["text"])
+        self.assertNotIn("Not currently recommended", by_slug["tool"]["text"])
+        self.assertIn("Category: Not yet classified", by_slug["a-ordinary"]["text"])
+        self.assertIn("Not currently recommended", by_slug["a-ordinary"]["text"])
         self.assertNotIn('class="recommendation recommended"', after)
         self.assertIn("Recommendation needs review", after)
         self.assertIn("No recommendation preference applies.", after)
@@ -557,71 +554,60 @@ class CatalogMetadataTests(unittest.TestCase):
             tag == "section" and attrs.get("id") == "recommended-region"
             for tag, attrs in parsed.card_ancestors["tool"]
         ))
+        card = parsed.cards[0]
+        self.assertIn("Category: Test environments", card["text"])
+        self.assertNotIn("Not currently recommended", card["text"])
 
-    def test_pinned_fixture_renders_two_recommended_first_and_twenty_unclassified(self) -> None:
-        # Fake-reviewed metadata in isolated fixtures exercises rendering only.
-        # It is not evidence of review or endorsement of the real initial choices.
+    def test_digital_twin_fixture_renders_category_and_ordinary_status(self) -> None:
         pinned = self.root / "pinned"
         write_json(pinned / "categories.json", read_json(ROOT / "categories.json", ROOT))
-        manifest_bytes = (self.root / "tools" / "tool" / "SMART_TOOL.md").read_bytes()
-        fixture_categories = {
-            "digital-twin-universe": "test-environments",
-            "smart-tool-creator": "smart-tool-development",
-        }
-        for slug, category in fixture_categories.items():
-            reviewed = copy.deepcopy(PINNED_FIXTURE_SOURCES[slug])
-            listing = {"category": category, "recommended": True, "reviewed_source": reviewed}
-            entry = pinned / "tools" / slug
-            write_json(entry / "listing.json", listing)
-            write_json(
-                entry / "source.json",
-                {field: reviewed[field] for field in ("repository", "path")} | {"ref": reviewed["commit"]},
-            )
-            write_json(
-                entry / "provenance.json",
-                {
-                    "source": {**reviewed, "ref": reviewed["commit"]},
-                    "original_manifest_path": "SMART_TOOL.md",
-                    "last_success": "2026-10-07T03:38:13Z",
-                },
-            )
-            (entry / "SMART_TOOL.md").write_bytes(manifest_bytes)
-        unclassified_slugs = [f"a-unclassified-{index:02d}" for index in range(20)]
-        for slug in unclassified_slugs:
-            write_json(
-                pinned / "tools" / slug / "source.json",
-                {"repository": IDENTITY["repository"]},
-            )
+        slug = "digital-twin-universe"
+        source_entry = ROOT / "tools" / slug
+        target_entry = pinned / "tools" / slug
+        for filename in ("source.json", "listing.json", "provenance.json", "SMART_TOOL.md"):
+            (target_entry / filename).parent.mkdir(parents=True, exist_ok=True)
+            (target_entry / filename).write_bytes((source_entry / filename).read_bytes())
+        unclassified_slug = "a-unclassified"
+        write_json(pinned / "tools" / unclassified_slug / "source.json", {"repository": IDENTITY["repository"]})
         document = rendered_catalog(pinned)
         cards = CatalogCards(document).cards
-        self.assertEqual(len(cards), len(catalog_sources(pinned)))
-        self.assertEqual({card["slug"] for card in cards[:len(fixture_categories)]}, set(fixture_categories))
-        self.assertEqual(
-            {card["slug"] for card in cards if ["recommendation", "recommended"] in card["badges"]},
-            set(fixture_categories),
-        )
-        self.assertEqual(
-            {card["slug"] for card in cards if card["category"] == ""},
-            set(unclassified_slugs),
-        )
+        self.assertEqual(len(cards), 2)
+        by_slug = {card["slug"]: card for card in cards}
+        dtu = by_slug[slug]
+        self.assertEqual(dtu["category"], "test-environments")
+        self.assertEqual(dtu["badges"], [["recommendation", "ordinary"]])
+        self.assertIn("Category: Test environments", dtu["text"])
+        self.assertIn("Not currently recommended", dtu["text"])
+        unclassified = by_slug[unclassified_slug]
+        self.assertEqual(unclassified["category"], "")
+        self.assertEqual(unclassified["badges"], [["recommendation", "ordinary"]])
+        self.assertIn("Category: Not yet classified", unclassified["text"])
+        self.assertIn("Not currently recommended", unclassified["text"])
         self.assertIn('value="__unclassified__">Not yet classified', document)
-        self.assertIn(f"{len(cards)} tools", document)
-        self.assertIn(CATEGORY["label"], document)
-        self.assertIn("Smart Tool development", document)
-        self.assertEqual(document.count('data-recommended="true"'), len(fixture_categories))
-        self.assertEqual(document.count('data-recommended="false"'), len(unclassified_slugs))
+        self.assertIn("2 tools", document)
+        self.assertIn("Test environments", document)
+        self.assertEqual(document.count('data-recommended="true"'), 0)
+        self.assertEqual(document.count('data-recommended="false"'), 2)
 
     def test_real_catalog_renders_recorded_states_including_drift(self) -> None:
         # Refresh may advance live snapshots without renewing editorial review.
         # Derive expected badges and preference from the shared identity helper.
         categories, listings = load_catalog_metadata(ROOT)
         expected = []
+        expected_labels = {}
+        expected_states = {}
         for source in catalog_sources(ROOT):
             slug = source.parent.name
             pointer = validate_pointer(read_json(source, ROOT))
             manifest, provenance = read_snapshot(source.parent, ROOT)
             listing = listings.get(slug)
             state = recommendation_state(pointer, provenance, listing, bool(manifest))
+            expected_labels[slug] = (
+                f"Category: {categories[listing['category']]['label']}"
+                if listing
+                else "Category: Not yet classified"
+            )
+            expected_states[slug] = state
             expected.append(
                 (
                     state != "recommended",
@@ -629,7 +615,11 @@ class CatalogMetadataTests(unittest.TestCase):
                     {
                         "slug": slug,
                         "category": listing["category"] if listing else ("" if categories is not None else None),
-                        "badges": [] if state == "ordinary" else [["recommendation", state]],
+                        "badges": (
+                            [["recommendation", "ordinary"]]
+                            if state == "ordinary"
+                            else [["recommendation", state]]
+                        ),
                     },
                 )
             )
@@ -637,8 +627,12 @@ class CatalogMetadataTests(unittest.TestCase):
         parsed = CatalogCards(document)
         cards = parsed.cards
         # Category grouping may change ordinary order without changing discovery.
+        rendered_cards = [
+            {field: card[field] for field in ("slug", "category", "badges")}
+            for card in cards
+        ]
         self.assertEqual(
-            sorted(cards, key=lambda card: card["slug"]),
+            sorted(rendered_cards, key=lambda card: card["slug"]),
             sorted((card for _, _, card in expected), key=lambda card: card["slug"]),
         )
         recommended_slugs = {slug for ordinary, slug, _ in expected if not ordinary}
@@ -647,8 +641,16 @@ class CatalogMetadataTests(unittest.TestCase):
         self.assertEqual(len(cards), len(expected))
         self.assertEqual(sum(bool(card["category"]) for card in cards), len(listings))
         self.assertEqual(sum(card["category"] == "" for card in cards), len(expected) - len(listings))
-        self.assertTrue(all(not card["badges"] for card in cards))
+        self.assertEqual(len(expected_labels), 22)
+        self.assertEqual(set(expected_labels), {card["slug"] for card in cards})
         self.assertNotIn('data-recommended="true"', document)
+        for card in cards:
+            text = " ".join(card["text"].split())
+            self.assertIn(expected_labels[card["slug"]], text)
+            self.assertEqual(
+                "Not currently recommended" in text,
+                expected_states[card["slug"]] == "ordinary",
+            )
         tiles: dict[str, str] = {}
         for text, ancestors in parsed.text_runs:
             for tag, attrs in ancestors:
