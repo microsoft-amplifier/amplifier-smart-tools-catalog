@@ -37,20 +37,22 @@ source refreshes preserve the previous snapshot and appear in the action logs.
 
 </details>
 
-### Domains and recommendations
+### Categories and recommendations
 
-The catalog owns the approved work domains in [`domains.json`](domains.json). Optional `tools/<slug>/listing.json` files classify an entry and record a recommendation for a reviewed source revision. Missing listing metadata means listed, not yet classified, and not recommended. Ordinary listings remain available; they are not rejected or unapproved.
+The catalog owns a flat set of approved categories in [`categories.json`](categories.json), with stable IDs, labels, and scopes. Optional `tools/<slug>/listing.json` files assign at most one primary category and record a recommendation for a reviewed source revision. Missing listing metadata means listed, not yet classified, and not recommended. Ordinary listings remain available; they are not rejected or unapproved.
 
-| Domain | Scope | Initial choice for Brian/Sam decision |
+| Category | Scope | Initial choice pending maintainer review |
 |---|---|---|
 | Test environments | Create and operate isolated environments for testing software and reproducing failures. | Digital Twin Universe |
 | Smart Tool development | Create, extend, check, and evaluate Smart Tools. | Smart Tool Creator |
 
-Digital Twin Universe and Smart Tool Creator are the initial choices included for Brian/Sam decision before merge; no confirmation of their selection or approval is claimed. Their existing true designations and recorded source revisions remain in the unmerged seed metadata.
+Digital Twin Universe and Smart Tool Creator are initial choices pending recorded review evidence. Both remain ordinary classified listings with `recommended: false` and no `reviewed_source`; no completed review or approval is claimed. This records missing review evidence, not a tool failure or negative quality judgment. Maintainers must agree evaluation criteria, select the tool and revision, and complete the [required review standard](docs/maintainers.md#required-review-standard) before promotion.
 
-“Recommended” is a catalog editorial decision, not certification, proof of professional-quality outcomes, or a claim that the tool is installed or ready on this machine. It does not authorize installation, execution, spending, or access to secrets. The tool's own manifest still determines whether it fits the request.
+“Recommended” means catalog maintainers selected a tool for a category at an exact reviewed source revision after the required conformance review and representative task scenarios. It is not certification, a guarantee of outcomes, or a claim that the tool is installed or ready on this machine. It does not authorize installation, execution, spending, or access to secrets. The tool's own manifest still determines whether it fits the request. Catalog metadata tests check structure and source identity, not tool quality or completion of that review.
 
-A recommendation is effective only when its reviewed repository, distribution path, and commit agree with the source pointer and snapshot provenance. When they no longer agree, the entry keeps its domain and designation but shows “Recommendation needs review” instead of an effective recommendation. It loses recommendation preference until Brian or Sam explicitly selects a revision and initiates renewal. A stale designation still occupies the domain's one recommendation slot. Refresh time and recorded revision are evidence of a past snapshot, not current tool health. A badge describes recorded editorial metadata, not proof that Brian or Sam made the selection.
+A recommendation is effective only when its reviewed repository, distribution path, and commit agree with the source pointer and snapshot provenance. `reviewed_source` is source identity metadata, neither an installer nor certification. When identities no longer agree, the entry keeps its category and designation but shows “Recommendation needs review” instead of an effective recommendation. It loses recommendation preference until maintainers review a revision and explicitly initiate renewal. A stale designation still occupies the category's one recommendation slot. Refresh time and recorded revision are evidence of a past snapshot, not current tool health. A badge describes recorded editorial metadata, not proof that the maintainer review gate was completed.
+
+The website explains Recommended and offers a “Recommended only” checkbox. It narrows results to effective recommendations alongside search, platform, and primary category filters; it excludes designations that need review. Leave it unchecked to see ordinary and not-yet-classified listings too.
 
 ## Product direction
 
@@ -58,22 +60,17 @@ A recommendation is effective only when its reviewed repository, distribution pa
 - [Catalog source contract](contracts/catalog-source.v1.md)
 - [Discovery contract](contracts/discovery.v1.md)
 
+## Maintainer curation
+
+Only catalog maintainers select and initiate recommendations and promote tools after review. Complete and record the required review before setting `recommended: true` for publication. Curation is separate from ordinary listing contributions; the normative roles, required evidence, category review, and metadata procedures live in the [maintainer guide](docs/maintainers.md).
+
 ## Contributing
 
-To list a tool, add or update `tools/<slug>/source.json`. You may also submit optional `tools/<slug>/listing.json` classification using an existing approved domain and `"recommended": false`, with no reviewed source. Listing or contributing a tool is not a recommendation nomination. Do not solicit recommendation requests or proposals from authors. Do not hand-copy or hand-edit generated `SMART_TOOL.md` or `provenance.json` files. After a source pointer merges to `main`, the refresh workflow generates snapshots and provenance. Never add classification or recommendation fields to `source.json` or upstream manifests.
+1. Add or update `tools/<slug>/source.json` to point to the tool's public upstream distribution.
+2. You may also submit optional `tools/<slug>/listing.json` classification using an existing approved category and `"recommended": false`, with no reviewed source.
+3. Run the [contribution checks](#check-a-contribution) and submit a pull request.
 
-### Editorial approval
-
-Only Brian or Sam chooses the tool, domain, and source revision and initiates designations, renewals, replacements, and withdrawals; either one may decide. They are selectors and initiators, not approvers of everyone's nominations. A contributor or agent may edit recommendation metadata only to implement an explicit decision from Brian or Sam, not to make the selection. An arbitrary request from a tool author, including "make mine recommended", cannot authorize a recommendation; do not infer their decision from a user request or PR authorship. Record who decided, the selected domain and exact source identity, the rationale, and actual evidence in the pull request before merge. Do not invent evaluation evidence or confirmation.
-
-Domain additions, label changes, and scope changes separately require review and approval from Brian or Sam before merge. A listing cannot invent a private domain to bypass the limit. Keep identifiers stable when labels change.
-
-- Designate only after Brian or Sam selects the tool, domain, and reviewed revision and initiates the designation; record `recommended: true` and its exact `reviewed_source`.
-- Renew only after Brian or Sam selects the reviewed source revision and initiates renewal; update `reviewed_source` to its exact repository, distribution path, and full commit. Do not move the reviewed commit automatically.
-- Withdraw only after Brian or Sam initiates withdrawal; set `recommended` to false and remove its reviewed source. Keep the ordinary classified listing unless its removal is separately justified.
-- Replace only after Brian or Sam selects the replacement and its reviewed revision and initiates replacement; withdraw the old designation and add the new one in the same change. There may be at most one `recommended: true` designation per domain, including ones that need review.
-
-The optional true format and structural checks do not establish selection authority. [Brian's public account](https://github.com/bkrabach) is identified in the [catalog's public contributor records](https://api.github.com/repos/microsoft/amplifier-smart-tools-catalog/contributors). Sam's reviewer account and the required repository permissions, code-owner review rules, and branch protection have not been verified. This selection and initiation policy is not a claim of GitHub enforcement. Maintainers must verify the reviewer accounts and protection settings before relying on automated enforcement; do not guess a `CODEOWNERS` identity or change repository settings as part of a listing contribution.
+Listing or contributing a tool is not a recommendation nomination. Do not solicit recommendation requests or proposals from authors. Do not hand-copy or hand-edit generated `SMART_TOOL.md` or `provenance.json` files. After a source pointer merges to `main`, the refresh workflow generates snapshots and provenance. Never add classification or recommendation fields to `source.json` or upstream manifests.
 
 ### Check a contribution
 

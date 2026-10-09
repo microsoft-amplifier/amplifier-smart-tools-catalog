@@ -28,9 +28,24 @@ from catalog_metadata import (
 )
 
 
-DOMAIN = {"id": "test-environments", "label": "Test environments", "scope": "Isolated testing."}
+CATEGORY = {"id": "test-environments", "label": "Test environments", "scope": "Isolated testing."}
 IDENTITY = {"repository": "https://example.test/tool.git", "path": ".", "commit": "a" * 40}
-LISTING = {"domain": DOMAIN["id"], "recommended": True, "reviewed_source": IDENTITY}
+# Synthetic reviewed metadata is test-only, never evidence of an actual review.
+LISTING = {"category": CATEGORY["id"], "recommended": True, "reviewed_source": IDENTITY}
+# Identities copied from pinned snapshot provenance, not live listing metadata.
+# Pinning these test-only identities makes badge coverage independent of refresh.
+PINNED_FIXTURE_SOURCES = {
+    "digital-twin-universe": {
+        "repository": "https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe.git",
+        "path": ".",
+        "commit": "900583d3bc40ea8c6363a9b53c2560a0cdc98b74",
+    },
+    "smart-tool-creator": {
+        "repository": "https://github.com/microsoft/amplifier-smart-tool-creator.git",
+        "path": ".",
+        "commit": "7337543a6a596b2f94a7cdc648b4a53e8cf44919",
+    },
+}
 
 
 def write_json(path: Path, value: object) -> None:
@@ -45,21 +60,53 @@ class CatalogCards(HTMLParser):
         super().__init__()
         self.cards: list[dict[str, object]] = []
         self.card: dict[str, object] | None = None
+        self.checkboxes: list[dict[str, str | None]] = []
+        self.labels: dict[str, str] = {}
+        self.label_target: str | None = None
+        self.elements: list[tuple[str, dict[str, str | None]]] = []
+        self.guide_heading: dict[str, object] | None = None
+        self.in_guide_heading = False
         self.feed(document)
 
     def handle_starttag(self, tag: str, attributes: list[tuple[str, str | None]]) -> None:
         attrs = dict(attributes)
+        if tag == "h2" and attrs.get("id") == "recommendation-guide-title":
+            self.guide_heading = {"attrs": attrs, "ancestors": list(self.elements), "text": ""}
+            self.in_guide_heading = True
+        if tag not in ("area", "base", "br", "col", "embed", "hr", "img", "input",
+                       "link", "meta", "param", "source", "track", "wbr"):
+            self.elements.append((tag, attrs))
+        if tag == "input" and attrs.get("type") == "checkbox":
+            self.checkboxes.append(attrs)
+        if tag == "label":
+            self.label_target = attrs.get("for")
+            if self.label_target:
+                self.labels[self.label_target] = ""
         if tag == "article" and attrs.get("class") == "catalog-card":
-            self.card = {"slug": attrs["data-tool"], "domain": attrs.get("data-domain"), "badges": []}
+            self.card = {"slug": attrs["data-tool"], "category": attrs.get("data-category"), "badges": []}
             self.cards.append(self.card)
-        elif tag == "span" and self.card is not None:
+        elif tag in ("span", "summary") and self.card is not None:
             classes = (attrs.get("class") or "").split()
             if "recommendation" in classes:
                 self.card["badges"].append(classes)
 
     def handle_endtag(self, tag: str) -> None:
+        if tag == "h2":
+            self.in_guide_heading = False
+        for index in range(len(self.elements) - 1, -1, -1):
+            if self.elements[index][0] == tag:
+                del self.elements[index:]
+                break
         if tag == "article":
             self.card = None
+        if tag == "label":
+            self.label_target = None
+
+    def handle_data(self, data: str) -> None:
+        if self.in_guide_heading and self.guide_heading is not None:
+            self.guide_heading["text"] += data
+        if self.label_target:
+            self.labels[self.label_target] += data
 
 
 def rendered_catalog(root: Path) -> str:
@@ -75,7 +122,7 @@ class CatalogMetadataTests(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
-        write_json(self.root / "domains.json", {"domains": [DOMAIN]})
+        write_json(self.root / "categories.json", {"categories": [CATEGORY]})
         self.add_entry("tool", LISTING)
 
     def add_entry(self, slug: str, listing: object | None) -> Path:
@@ -98,21 +145,21 @@ class CatalogMetadataTests(unittest.TestCase):
         return entry
 
     def test_valid_recommendation_and_classified_alternative(self) -> None:
-        self.add_entry("alternative", {"domain": DOMAIN["id"], "recommended": False})
-        domains, listings = load_catalog_metadata(self.root)
-        self.assertEqual(domains, {DOMAIN["id"]: DOMAIN})
+        self.add_entry("alternative", {"category": CATEGORY["id"], "recommended": False})
+        categories, listings = load_catalog_metadata(self.root)
+        self.assertEqual(categories, {CATEGORY["id"]: CATEGORY})
         self.assertEqual(listings["tool"], LISTING)
-        self.assertEqual(listings["alternative"], {"domain": DOMAIN["id"], "recommended": False})
+        self.assertEqual(listings["alternative"], {"category": CATEGORY["id"], "recommended": False})
 
     def test_missing_metadata_preserves_legacy_catalog(self) -> None:
-        (self.root / "domains.json").unlink()
+        (self.root / "categories.json").unlink()
         (self.root / "tools" / "tool" / "listing.json").unlink()
         self.assertEqual(load_catalog_metadata(self.root), (None, {}))
 
     def test_registry_with_unclassified_listing_is_valid(self) -> None:
         self.add_entry("unclassified", None)
-        domains, listings = load_catalog_metadata(self.root)
-        self.assertEqual(domains, {DOMAIN["id"]: DOMAIN})
+        categories, listings = load_catalog_metadata(self.root)
+        self.assertEqual(categories, {CATEGORY["id"]: CATEGORY})
         self.assertNotIn("unclassified", listings)
 
     def test_new_pointer_does_not_require_a_generated_snapshot(self) -> None:
@@ -122,25 +169,25 @@ class CatalogMetadataTests(unittest.TestCase):
         _, listings = load_catalog_metadata(self.root)
         self.assertNotIn("new-tool", listings)
 
-    def test_unknown_domain_and_listing_without_registry_fail(self) -> None:
-        write_json(self.root / "tools" / "tool" / "listing.json", {**LISTING, "domain": "self-awarded"})
-        with self.assertRaises(ValueError):
+    def test_unknown_category_and_listing_without_registry_fail(self) -> None:
+        write_json(self.root / "tools" / "tool" / "listing.json", {**LISTING, "category": "self-awarded"})
+        with self.assertRaisesRegex(ValueError, "category"):
             load_catalog_metadata(self.root)
         write_json(self.root / "tools" / "tool" / "listing.json", LISTING)
-        (self.root / "domains.json").unlink()
-        with self.assertRaises(ValueError):
+        (self.root / "categories.json").unlink()
+        with self.assertRaisesRegex(ValueError, r"categories\.json"):
             load_catalog_metadata(self.root)
 
-    def test_duplicate_domain_and_second_designation_fail(self) -> None:
-        write_json(self.root / "domains.json", {"domains": [DOMAIN, DOMAIN]})
+    def test_duplicate_category_and_second_designation_fail(self) -> None:
+        write_json(self.root / "categories.json", {"categories": [CATEGORY, CATEGORY]})
         with self.assertRaises(ValueError):
             load_catalog_metadata(self.root)
-        write_json(self.root / "domains.json", {"domains": [DOMAIN]})
+        write_json(self.root / "categories.json", {"categories": [CATEGORY]})
         self.add_entry("second", LISTING)
         with self.assertRaises(ValueError):
             load_catalog_metadata(self.root)
 
-    def test_stale_designation_still_reserves_the_domain(self) -> None:
+    def test_stale_designation_still_reserves_the_category(self) -> None:
         provenance = self.root / "tools" / "tool" / "provenance.json"
         value = json.loads(provenance.read_text())
         value["source"]["commit"] = "b" * 40
@@ -154,29 +201,60 @@ class CatalogMetadataTests(unittest.TestCase):
             load_catalog_metadata(self.root)
 
     def test_registry_types_and_required_fields_fail(self) -> None:
-        invalid = [[], {"domains": {}}, {"domains": [None]}, {"domains": [True]}]
+        invalid = [[], {"categories": {}}, {"categories": [None]}, {"categories": [True]}]
         for field in ("id", "label", "scope"):
             for bad in (None, False, 7, "", [], {}):
-                invalid.append({"domains": [{**DOMAIN, field: bad}]})
-            invalid.append({"domains": [{key: value for key, value in DOMAIN.items() if key != field}]})
+                invalid.append({"categories": [{**CATEGORY, field: bad}]})
+            invalid.append({"categories": [{key: value for key, value in CATEGORY.items() if key != field}]})
         for value in invalid:
             with self.subTest(value=value):
-                write_json(self.root / "domains.json", value)
+                write_json(self.root / "categories.json", value)
                 with self.assertRaises(ValueError):
                     load_catalog_metadata(self.root)
 
     def test_listing_types_and_required_fields_fail(self) -> None:
-        invalid = [[], None, True, {}, {"domain": DOMAIN["id"]}, {"recommended": True}]
+        invalid = [[], None, True, {}, {"category": CATEGORY["id"]}, {"recommended": True}]
         for bad in (None, "true", 1, 0, [], {}):
             invalid.append({**LISTING, "recommended": bad})
         for bad in (None, False, 7, "", [], {}):
-            invalid.append({**LISTING, "domain": bad})
-        invalid.append({"domain": DOMAIN["id"], "recommended": True})
+            invalid.append({**LISTING, "category": bad})
+        invalid.append({"category": CATEGORY["id"], "recommended": True})
         for value in invalid:
             with self.subTest(value=value):
                 write_json(self.root / "tools" / "tool" / "listing.json", value)
                 with self.assertRaises(ValueError):
                     load_catalog_metadata(self.root)
+
+    def test_only_one_primary_category_and_no_duplicate_evidence_fields(self) -> None:
+        for value in (
+            {**LISTING, "category": [CATEGORY["id"]]},
+            {**LISTING, "categories": [CATEGORY["id"]]},
+            {**LISTING, "review_evidence": "https://example.test/review"},
+            {**LISTING, "review_status": "passed"},
+            {"category": CATEGORY["id"], "recommended": False, "reviewed_source": IDENTITY},
+        ):
+            with self.subTest(value=value):
+                write_json(self.root / "tools" / "tool" / "listing.json", value)
+                with self.assertRaises(ValueError):
+                    load_catalog_metadata(self.root)
+
+    def test_registry_is_flat_and_closed(self) -> None:
+        for category in (
+            {**CATEGORY, "children": []},
+            {**CATEGORY, "parent": "other"},
+            {**CATEGORY, "id": "Invalid ID"},
+        ):
+            with self.subTest(category=category):
+                write_json(self.root / "categories.json", {"categories": [category]})
+                with self.assertRaises(ValueError):
+                    load_catalog_metadata(self.root)
+
+    def test_structural_validation_does_not_establish_maintainer_authority(self) -> None:
+        # A valid designation alone cannot distinguish a maintainer decision
+        # from creator-authored metadata. Authorization is the documented merge
+        # gate, not a runtime claim made by the schema validator.
+        _, listings = load_catalog_metadata(self.root)
+        self.assertEqual(listings["tool"], LISTING)
 
     def test_reviewed_source_identity_validation(self) -> None:
         invalid = [None, [], True, {}]
@@ -202,7 +280,7 @@ class CatalogMetadataTests(unittest.TestCase):
                     load_catalog_metadata(self.root)
 
     def test_malformed_json_fails_without_changing_files(self) -> None:
-        for relative in ("domains.json", "tools/tool/listing.json"):
+        for relative in ("categories.json", "tools/tool/listing.json"):
             with self.subTest(file=relative):
                 target = self.root / relative
                 original = target.read_bytes()
@@ -214,6 +292,8 @@ class CatalogMetadataTests(unittest.TestCase):
 
     def test_validation_never_renews_editorial_data(self) -> None:
         listing_file = self.root / "tools" / "tool" / "listing.json"
+        registry_file = self.root / "categories.json"
+        registry_before = registry_file.read_bytes()
         before = listing_file.read_bytes()
         changed = copy.deepcopy(LISTING)
         changed["reviewed_source"]["commit"] = "b" * 40
@@ -223,10 +303,11 @@ class CatalogMetadataTests(unittest.TestCase):
         _, listings = load_catalog_metadata(self.root)
         self.assertEqual(listings["tool"], changed)
         self.assertEqual(listing_file.read_bytes(), old_review)
+        self.assertEqual(registry_file.read_bytes(), registry_before)
         self.assertNotEqual(old_review, before)
 
-    def test_real_seed_domains_and_reviewed_sources_record_selected_revisions(self) -> None:
-        expected_domains = {
+    def test_real_initial_choices_are_classified_without_reviewed_sources(self) -> None:
+        expected_categories = {
             "test-environments": (
                 "Test environments",
                 "Create and operate isolated environments for testing software and reproducing failures.",
@@ -236,35 +317,28 @@ class CatalogMetadataTests(unittest.TestCase):
                 "Create, extend, check, and evaluate Smart Tools.",
             ),
         }
-        registry = json.loads((ROOT / "domains.json").read_text())
+        registry = json.loads((ROOT / "categories.json").read_text())
         self.assertEqual(
-            {domain["id"]: (domain["label"], domain["scope"]) for domain in registry["domains"]},
-            expected_domains,
+            {category["id"]: (category["label"], category["scope"]) for category in registry["categories"]},
+            expected_categories,
         )
         seeds = {
-            "digital-twin-universe": ("test-environments", "900583d3bc40ea8c6363a9b53c2560a0cdc98b74"),
-            "smart-tool-creator": ("smart-tool-development", "7337543a6a596b2f94a7cdc648b4a53e8cf44919"),
+            "digital-twin-universe": "test-environments",
+            "smart-tool-creator": "smart-tool-development",
         }
-        for slug, (domain, commit) in seeds.items():
+        for slug, category in seeds.items():
             entry = ROOT / "tools" / slug
             listing = json.loads((entry / "listing.json").read_text())
-            source = json.loads((entry / "source.json").read_text())
-            self.assertEqual(listing["domain"], domain)
-            self.assertIs(listing["recommended"], True)
-            self.assertEqual(
-                listing["reviewed_source"],
-                {"repository": source["repository"], "path": source.get("path", "."), "commit": commit},
-            )
-            # Do not assert equality to today's provenance commit: refresh may
-            # legitimately advance it without renewing the editorial review.
+            self.assertEqual(listing, {"category": category, "recommended": False})
+            self.assertNotIn("reviewed_source", listing)
         self.assertEqual(len(list(ROOT.glob("tools/*/listing.json"))), 2)
-        domains, listings = load_catalog_metadata(ROOT)
-        self.assertEqual(set(domains), set(expected_domains))
+        categories, listings = load_catalog_metadata(ROOT)
+        self.assertEqual(set(categories), set(expected_categories))
         self.assertEqual(set(listings), set(seeds))
 
     def test_real_seeds_remain_valid_metadata_after_snapshot_refresh(self) -> None:
         seed_root = self.root / "seeds"
-        write_json(seed_root / "domains.json", json.loads((ROOT / "domains.json").read_text()))
+        write_json(seed_root / "categories.json", json.loads((ROOT / "categories.json").read_text()))
         for entry in ROOT.glob("tools/*/listing.json"):
             slug = entry.parent.name
             for name in ("source.json", "listing.json", "provenance.json", "SMART_TOOL.md"):
@@ -281,7 +355,7 @@ class CatalogMetadataTests(unittest.TestCase):
             pointer = read_json(seed_root / "tools" / slug / "source.json", seed_root)
             manifest, provenance = read_snapshot(seed_root / "tools" / slug, seed_root)
             self.assertEqual(
-                recommendation_state(pointer, provenance, listings[slug], bool(manifest)), "needs-review"
+                recommendation_state(pointer, provenance, listings[slug], bool(manifest)), "ordinary"
             )
             self.assertEqual(listing_file.read_bytes(), before)
 
@@ -300,6 +374,16 @@ class CatalogMetadataTests(unittest.TestCase):
             self.assertEqual(cli.main(["--catalog-root", str(self.root)]), 1)
         self.assertIn("ERROR catalog: invalid metadata", errors.getvalue())
 
+    def test_cli_help_describes_category_metadata(self) -> None:
+        spec = importlib.util.spec_from_file_location("validate_catalog_cli", ROOT / "scripts" / "validate_catalog.py")
+        assert spec and spec.loader
+        cli = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cli)
+        with redirect_stdout(io.StringIO()) as output, self.assertRaises(SystemExit) as result:
+            cli.main(["--help"])
+        self.assertEqual(result.exception.code, 0)
+        self.assertIn("optional categories.json", " ".join(output.getvalue().split()))
+
     def test_recommendation_requires_matching_pointer_review_and_snapshot(self) -> None:
         entry = self.root / "tools" / "tool"
         pointer = read_json(entry / "source.json", self.root)
@@ -310,7 +394,7 @@ class CatalogMetadataTests(unittest.TestCase):
         self.assertEqual(recommendation_state(pointer, provenance, LISTING), "recommended")
         self.assertEqual(recommendation_state(pointer, provenance, None), "ordinary")
         self.assertEqual(
-            recommendation_state(pointer, provenance, {"domain": DOMAIN["id"], "recommended": False}),
+            recommendation_state(pointer, provenance, {"category": CATEGORY["id"], "recommended": False}),
             "ordinary",
         )
         self.assertEqual(recommendation_state(pointer, provenance, LISTING, False), "needs-review")
@@ -349,22 +433,62 @@ class CatalogMetadataTests(unittest.TestCase):
         after = rendered_catalog(self.root)
         cards = CatalogCards(after).cards
         self.assertEqual([card["slug"] for card in cards], ["a-ordinary", "tool"])
-        self.assertEqual(cards[1]["domain"], DOMAIN["id"])
+        self.assertEqual(cards[1]["category"], CATEGORY["id"])
         self.assertEqual(cards[1]["badges"], [["recommendation", "needs-review"]])
         self.assertNotIn('class="recommendation recommended"', after)
         self.assertIn("Recommendation needs review", after)
         self.assertIn("No recommendation preference applies.", after)
         self.assertEqual(listing_path.read_bytes(), original)
 
+    def test_recommended_only_checkbox_is_named_and_unchecked_by_default(self) -> None:
+        controls = CatalogCards(rendered_catalog(self.root))
+        recommended_only = [
+            checkbox for checkbox in controls.checkboxes
+            if checkbox.get("aria-label") == "Recommended only"
+            or controls.labels.get(checkbox.get("id", ""), "").strip() == "Recommended only"
+        ]
+        self.assertEqual(len(recommended_only), 1)
+        self.assertNotIn("checked", recommended_only[0])
+
+    def test_recommended_disclosure_explains_recorded_revision_and_limits(self) -> None:
+        document = rendered_catalog(self.root)
+        self.assertIn('<details class="recommendation-disclosure">', document)
+        self.assertIn('<summary class="recommendation recommended">Recommended</summary>', document)
+        self.assertIn(f'<code>{IDENTITY["commit"]}</code>', document)
+        self.assertIn("Not certification or proof of host readiness.", document)
+        heading = CatalogCards(document).guide_heading
+        self.assertIsNotNone(heading)
+        self.assertEqual(heading["text"].strip(), "What does Recommended mean?")
+        self.assertTrue(any(
+            tag == "section" and attrs.get("aria-labelledby") == "recommendation-guide-title"
+            for tag, attrs in heading["ancestors"]
+        ))
+        for tag, attrs in [*heading["ancestors"], ("h2", heading["attrs"])]:
+            self.assertNotEqual(tag, "details", "The guide must be outside disclosures.")
+            self.assertNotIn("hidden", attrs)
+            self.assertNotEqual(attrs.get("aria-hidden"), "true")
+        for explanation in (
+            "specification conformance, representative-task evidence, and documented limitations",
+            "Compare documented capabilities, platform support, and prerequisites with your task first.",
+            "Recommended is a preference among suitable options, not an override; consider suitable alternatives.",
+            "Unclassified or undesignated tools are not a negative quality judgment.",
+            "“Recommended only” is optional and starts unchecked, so all tools remain visible by default.",
+        ):
+            self.assertIn(explanation, document)
+
     def test_pinned_fixture_renders_two_recommended_first_and_twenty_unclassified(self) -> None:
-        # Construct isolated snapshots at the reviewed commits, independent of
-        # live provenance. Only this initial-state fixture assumes two badges.
+        # Fake-reviewed metadata in isolated fixtures exercises rendering only.
+        # It is not evidence of review or endorsement of the real initial choices.
         pinned = self.root / "pinned"
-        write_json(pinned / "domains.json", read_json(ROOT / "domains.json", ROOT))
+        write_json(pinned / "categories.json", read_json(ROOT / "categories.json", ROOT))
         manifest_bytes = (self.root / "tools" / "tool" / "SMART_TOOL.md").read_bytes()
-        for slug in ("digital-twin-universe", "smart-tool-creator"):
-            listing = read_json(ROOT / "tools" / slug / "listing.json", ROOT)
-            reviewed = listing["reviewed_source"]
+        fixture_categories = {
+            "digital-twin-universe": "test-environments",
+            "smart-tool-creator": "smart-tool-development",
+        }
+        for slug, category in fixture_categories.items():
+            reviewed = copy.deepcopy(PINNED_FIXTURE_SOURCES[slug])
+            listing = {"category": category, "recommended": True, "reviewed_source": reviewed}
             entry = pinned / "tools" / slug
             write_json(entry / "listing.json", listing)
             write_json(
@@ -393,16 +517,18 @@ class CatalogMetadataTests(unittest.TestCase):
             [card["slug"] for card in cards if ["recommendation", "recommended"] in card["badges"]],
             ["digital-twin-universe", "smart-tool-creator"],
         )
-        self.assertEqual(sum(card["domain"] == "" for card in cards), 20)
+        self.assertEqual(sum(card["category"] == "" for card in cards), 20)
         self.assertIn('value="__unclassified__">Not yet classified', document)
         self.assertIn("22 tools", document)
-        self.assertIn(DOMAIN["label"], document)
+        self.assertIn(CATEGORY["label"], document)
         self.assertIn("Smart Tool development", document)
+        self.assertEqual(document.count('data-recommended="true"'), 2)
+        self.assertEqual(document.count('data-recommended="false"'), 20)
 
     def test_real_catalog_renders_recorded_states_and_order_including_drift(self) -> None:
         # Refresh may advance live snapshots without renewing editorial review.
         # Derive expected badges and preference from the shared identity helper.
-        domains, listings = load_catalog_metadata(ROOT)
+        categories, listings = load_catalog_metadata(ROOT)
         expected = []
         for source in catalog_sources(ROOT):
             slug = source.parent.name
@@ -416,14 +542,20 @@ class CatalogMetadataTests(unittest.TestCase):
                     slug,
                     {
                         "slug": slug,
-                        "domain": listing["domain"] if listing else ("" if domains is not None else None),
+                        "category": listing["category"] if listing else ("" if categories is not None else None),
                         "badges": [] if state == "ordinary" else [["recommendation", state]],
                     },
                 )
             )
         document = rendered_catalog(ROOT)
-        self.assertEqual(CatalogCards(document).cards, [card for _, _, card in sorted(expected)])
+        cards = CatalogCards(document).cards
+        self.assertEqual(cards, [card for _, _, card in sorted(expected)])
         self.assertIn(f"{len(expected)} tools", document)
+        self.assertEqual(len(cards), 22)
+        self.assertEqual(sum(bool(card["category"]) for card in cards), 2)
+        self.assertEqual(sum(card["category"] == "" for card in cards), 20)
+        self.assertTrue(all(not card["badges"] for card in cards))
+        self.assertNotIn('data-recommended="true"', document)
 
 
 if __name__ == "__main__":

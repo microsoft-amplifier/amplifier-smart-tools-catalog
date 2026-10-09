@@ -63,3 +63,34 @@ The overview illustration has a pause control that also pauses its title mark. R
 preferences select the still image by default. Shared media lives in
 `site/theme/assets/` and is included by the theme sync script. The original briefs
 and generation provenance live in `amplifier-smart-tools/site/artwork/`.
+
+## Catalog categories and Recommended
+
+The catalog uses the flat `categories.json` taxonomy and each listing's optional
+primary `category`. Keep category IDs stable and expose labels and scopes without
+turning categories into a hierarchy. Ordinary and not-yet-classified listings
+remain available.
+
+Explain “Recommended” as a maintainer-selected tool for a category at an exact
+reviewed source revision after conformance review and representative task
+scenarios under the [maintainer guide](../docs/maintainers.md). It is not
+certification, guaranteed outcomes, or proof of local readiness. Catalog metadata
+tests do not establish tool quality or completion of that review.
+
+Provide a “Recommended only” checkbox alongside search, platform, and primary
+category filters. It is unchecked by default, combines with the other filters,
+and includes only effective recommendations. “Recommendation needs review”
+designations do not qualify. Clear filters resets it; with JavaScript disabled,
+all tools remain visible. Keep the explainer and checkbox accessible.
+
+Show the recorded reviewed revision separately from snapshot provenance and
+refresh time. Source drift removes recommendation preference without removing
+the category or listing. The stale designation still occupies its category's
+slot. Digital Twin Universe and Smart Tool Creator remain ordinary classified
+listings with `recommended: false` and no `reviewed_source`, pending recorded
+review evidence. This is not a negative quality judgment.
+
+Keep review evidence free of credentials and private details. Preserve public
+source URLs and exact generated manifests. Implement shared rendering and
+metadata changes in the canonical theme, then sync; never patch the vendored
+copy independently.

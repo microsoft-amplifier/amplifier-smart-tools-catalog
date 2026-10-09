@@ -18,7 +18,7 @@ def main(argv: list[str] | None = None) -> int:
         "--catalog-root",
         type=Path,
         default=CATALOG_ROOT,
-        help="catalog root containing tools/ and optional domains.json",
+        help="catalog root containing tools/ and optional categories.json",
     )
     arguments = parser.parse_args(argv)
 

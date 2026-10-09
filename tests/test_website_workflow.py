@@ -7,6 +7,8 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
+import yaml
+
 
 WORKFLOW = (Path(__file__).resolve().parents[1] / ".github" / "workflows" / "website.yml").read_text()
 
@@ -84,11 +86,23 @@ class WebsiteWorkflowTests(unittest.TestCase):
         self.assertFalse(condition("deploy", event_name="push", ref="refs/heads/feature"))
 
     def test_metadata_scripts_tests_and_review_artifacts_are_included(self) -> None:
-        for path in ("'domains.json'", "'scripts/**'", "'tests/**'", "'tools/**'", "'site/**'"):
+        for path in ("'categories.json'", "'scripts/**'", "'tests/**'", "'tools/**'", "'site/**'"):
             self.assertEqual(WORKFLOW.count(path), 2, path)
         self.assertIn("actions/upload-pages-artifact@v3", WORKFLOW)
         self.assertIn("retention-days: 7", WORKFLOW)
         self.assertIn("persist-credentials: false", WORKFLOW)
+
+    def test_workflow_yaml_parses_with_category_triggers_and_preview_retention(self) -> None:
+        # BaseLoader keeps the GitHub Actions "on" key rather than treating it
+        # as a YAML 1.1 boolean. Existing condition tests exercise trust gates.
+        workflow = yaml.load(WORKFLOW, Loader=yaml.BaseLoader)
+        for event in ("push", "pull_request"):
+            self.assertIn("categories.json", workflow["on"][event]["paths"])
+        steps = workflow["jobs"]["build"]["steps"]
+        upload = next(step for step in steps if step.get("uses") == "actions/upload-pages-artifact@v3")
+        self.assertEqual(upload["with"]["retention-days"], "7")
+        self.assertEqual(upload["with"]["path"], "_site")
+        self.assertEqual(workflow["jobs"]["deploy"]["needs"], "build")
 
 
 if __name__ == "__main__":

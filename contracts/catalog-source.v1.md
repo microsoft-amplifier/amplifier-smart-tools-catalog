@@ -50,29 +50,24 @@ The catalog preserves the upstream tool as the owner of its description.
 
 ## Optional catalog editorial metadata
 
-The inventory remains `tools/*/source.json`. Optional root `domains.json` contains `{"domains": [...]}`, with each domain recording a stable string `id`, a nonempty string `label`, and a nonempty string `scope`. IDs are unique. Domain additions, label changes, and scope changes are catalog review decisions, not upstream declarations.
+The inventory remains `tools/*/source.json`. Optional root `categories.json` contains `{"categories": [...]}`, with each category recording a stable string `id`, a nonempty string `label`, and a nonempty string `scope`. The taxonomy is flat and IDs are unique. Category additions, label changes, and scope changes require separate maintainer review and approval, not upstream declarations. IDs remain stable when labels change.
 
-Optional `tools/<slug>/listing.json` records one primary approved domain and a boolean recommendation designation:
+Optional `tools/<slug>/listing.json` records one primary approved category and a boolean recommendation designation:
 
 ```json
 {
-  "domain": "test-environments",
-  "recommended": true,
-  "reviewed_source": {
-    "repository": "https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe.git",
-    "path": ".",
-    "commit": "900583d3bc40ea8c6363a9b53c2560a0cdc98b74"
-  }
+  "category": "test-environments",
+  "recommended": false
 }
 ```
 
-This example records the DTU revision in the catalog's October 7 snapshot; it is not a current-health or certification claim. DTU and Smart Tool Creator remain initial choices included for Brian/Sam decision before merge; no confirmation of selection or approval is claimed by their unmerged true seed metadata. `domain` must identify a domain in this catalog's registry. `recommended` is a required boolean. When true, `reviewed_source` requires a credential-free HTTPS repository URL, a safe relative POSIX distribution path, and a full source commit. Repository, path, and commit are separate identity fields. An ordinary classified entry uses `recommended: false` and must not carry a reviewed source. Missing listing metadata means listed, unclassified, and not recommended; missing metadata preserves legacy discovery.
+This example is an ordinary classified listing, not a recommendation. DTU and Smart Tool Creator remain initial choices pending recorded review evidence, with `recommended: false` and no `reviewed_source`; this does not imply either tool failed. `category` must identify a category in this catalog's registry. `recommended` is a required boolean. When true, `reviewed_source` requires a credential-free HTTPS repository URL, a safe relative POSIX distribution path, and a full source commit. Repository, path, and commit are separate identity fields. `reviewed_source` is identity metadata, neither an installer nor certification. An ordinary classified entry uses `recommended: false` and must not carry a reviewed source. Missing listing metadata means listed, unclassified, and not recommended; missing metadata preserves legacy discovery.
 
-There may be at most one recommendation designation per domain. A designation that needs review still counts. Contributors submit source pointers and optional ordinary classification, not recommendation nominations. Do not solicit recommendation requests or proposals from authors. Only Brian or Sam chooses the tool, domain, and source revision and initiates designations, renewals, replacements, and withdrawals; either one may decide. They select and initiate, rather than approve everyone's nominations. Contributors or agents may edit metadata only to implement their explicit decision; an arbitrary author's "make mine recommended" request or PR authorship cannot authorize it. Record the decision, rationale, and actual evidence as described in the [contribution rules](../README.md#editorial-approval). Domain additions, label changes, and scope changes separately require Brian or Sam's review and approval; a contributor cannot create a tool-specific domain to evade the limit. The optional true format and structural checks do not establish selection authority; documentation alone does not prove GitHub enforces these rules.
+There may be at most one primary category per listing and one recommendation designation per category. A designation that needs review still counts. Contributors submit source pointers and optional ordinary classification, not recommendation nominations. Only catalog maintainers select tools, categories, and source revisions and initiate designations, renewals, replacements, and withdrawals. Contributors or agents may edit metadata only to implement an explicit maintainer decision; a creator request or PR authorship cannot authorize it. The [maintainer guide](../docs/maintainers.md) is normative: before merge, a designation, renewal, or replacement requires a recorded maintainer review status, decision, rationale, and evidence of conformance review and representative task scenarios, including exact revisions, PASS/SKIP results, environment, provider setup, inputs, expected and observed outcomes, and scope limitations. Evidence belongs in the PR or repository maintainer notes, not duplicate sidecar fields. Metadata validation does not evaluate tool quality, establish selection authority, or prove GitHub enforcement. Recommendation is revision-scoped editorial judgment, not certification, guaranteed outcomes, or local readiness.
 
 Effective recommendation requires agreement between reviewed source, source pointer, and snapshot provenance on repository, distribution path, and commit. Readers honor the pointer's requested or default ref, including a full commit pin, and do not treat an obsolete pointer/provenance pairing as effective. They read registry, listing, pointer, and snapshot from one resolved catalog revision. Well-formed metadata whose identity has drifted remains valid editorial data, but displays “Recommendation needs review” and confers no recommendation preference. Malformed metadata fails validation and cannot create an endorsement.
 
-Automatic refresh writes only generated snapshot and provenance files. It must preserve `domains.json`, every `listing.json`, and reviewed commits byte for byte after successful, failed, or partially successful refresh. Renewal, withdrawal, and replacement are deliberate editorial changes, never refresh side effects. Upstream manifests and source pointers cannot grant a catalog recommendation.
+Automatic refresh writes only generated snapshot and provenance files. It must preserve `categories.json`, every `listing.json`, and reviewed commits byte for byte after successful, failed, or partially successful refresh. Renewal, withdrawal, and replacement are deliberate editorial changes, never refresh side effects. Upstream manifests and source pointers cannot grant a catalog recommendation.
 
 ## What v1 deliberately does NOT freeze
 
@@ -95,6 +90,6 @@ claim that checks have passed.
 - Generated snapshots, when present, preserve the upstream manifest bytes and
   record the repository, requested ref, distribution path, resolved commit,
   original manifest path, and successful refresh time.
-- Missing editorial metadata preserves listing and discovery; known domains and correctly typed sidecars validate through the canonical shared validator.
-- Unknown domains, malformed metadata, invalid reviewed identities, and a second recommendation designation in one domain fail validation.
+- Missing editorial metadata preserves listing and discovery; known categories and correctly typed sidecars validate through the canonical shared validator.
+- Unknown categories, malformed metadata, invalid reviewed identities, and a second recommendation designation in one category fail validation.
 - Refresh preserves editorial files byte for byte, and source drift cannot silently renew an endorsement.

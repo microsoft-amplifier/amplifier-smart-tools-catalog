@@ -2,10 +2,10 @@ name: Website
 
 on:
   pull_request:
-    paths: ['site/**', 'docs/images/**', 'tools/**', 'domains.json', 'scripts/**', 'tests/**', '.github/workflows/website.yml']
+    paths: ['site/**', 'docs/images/**', 'tools/**', 'categories.json', 'scripts/**', 'tests/**', '.github/workflows/website.yml']
   push:
     branches: [main]
-    paths: ['site/**', 'docs/images/**', 'tools/**', 'domains.json', 'scripts/**', 'tests/**', '.github/workflows/website.yml']
+    paths: ['site/**', 'docs/images/**', 'tools/**', 'categories.json', 'scripts/**', 'tests/**', '.github/workflows/website.yml']
   workflow_run:
     workflows: [Refresh Amplifier Smart Tools manifests]
     types: [completed]

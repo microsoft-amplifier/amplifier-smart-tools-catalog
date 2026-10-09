@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import io
 import json
+import re
 import sys
 import tempfile
 import unittest
@@ -44,31 +45,16 @@ class RefreshManifestsTests(unittest.TestCase):
         self.assertIn('"recommended": false`, with no reviewed source', readme)
         self.assertIn("Listing or contributing a tool is not a recommendation nomination.", readme)
         self.assertIn("Do not solicit recommendation requests or proposals from authors.", readme)
+        self.assertIn("[maintainer guide](docs/maintainers.md)", readme)
+        self.assertIn("Only catalog maintainers select and initiate recommendations", readme)
         self.assertIn(
-            "Only Brian or Sam chooses the tool, domain, and source revision and initiates "
-            "designations, renewals, replacements, and withdrawals; either one may decide.",
+            "Complete and record the required review before setting `recommended: true` for publication.",
             readme,
         )
-        self.assertIn("selectors and initiators, not approvers of everyone's nominations", readme)
-        self.assertIn(
-            "may edit recommendation metadata only to implement an explicit decision "
-            "from Brian or Sam, not to make the selection",
-            readme,
-        )
-        self.assertIn(
-            'An arbitrary request from a tool author, including "make mine recommended", '
-            "cannot authorize a recommendation",
-            readme,
-        )
-        self.assertIn("do not infer their decision from a user request or PR authorship", readme)
-        self.assertIn("structural checks do not establish selection authority", readme)
-        self.assertIn("initial choices included for Brian/Sam decision before merge", readme)
-        self.assertIn("no confirmation of their selection or approval is claimed", readme)
-        self.assertIn("Sam's reviewer account", readme)
-        self.assertIn("not a claim of GitHub enforcement", readme)
-        self.assertNotIn("designated approver", readme)
-        for action in ("Designate", "Renew", "Withdraw", "Replace"):
-            self.assertIn(f"- {action} only after Brian or Sam", readme)
+        self.assertIn("initial choices pending recorded review evidence", readme)
+        self.assertIn("Both remain ordinary classified listings", readme)
+        self.assertIn("not a tool failure or negative quality judgment", readme)
+        self.assertIn("no completed review or approval is claimed", readme)
         self.assertIn("not certification", readme)
         self.assertNotIn("source pointers only", readme)
         self.assertIn("generated `SMART_TOOL.md`", readme)
@@ -100,7 +86,98 @@ This repository does not make a response-time commitment.""",
         self.assertIn("PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v", workflow)
         self.assertNotIn("refresh_manifests.py", workflow)
 
-    def test_brian_tool_sources_use_root_main_distributions(self) -> None:
+    def test_contributor_listing_steps_are_separate_from_maintainer_procedures(self) -> None:
+        catalog_root = SCRIPT.parents[1]
+        readme = (catalog_root / "README.md").read_text()
+        contribution = readme.split("## Contributing\n", 1)[1].split("### Check a contribution", 1)[0]
+        self.assertIn("1. Add or update `tools/<slug>/source.json`", contribution)
+        self.assertIn("existing approved category", contribution)
+        self.assertIn('"recommended": false`, with no reviewed source', contribution)
+        self.assertNotIn("reviewed_source", contribution)
+        self.assertNotIn("recommended: true", contribution)
+        for action in ("Designate", "Renew", "Withdraw", "Replace"):
+            self.assertNotIn(f"- {action} only after", readme)
+
+    def test_maintainer_guide_requires_revision_scoped_review_evidence_before_merge(self) -> None:
+        catalog_root = SCRIPT.parents[1]
+        guide = re.sub(r"\s+", " ", (catalog_root / "docs" / "maintainers.md").read_text())
+        self.assertIn("This guide is normative", guide)
+        self.assertIn("Only catalog maintainers select the tool, primary category, and source revision", guide)
+        self.assertIn("select, initiate, and promote", guide)
+        self.assertIn("to implement an explicit maintainer decision, not make the selection", guide)
+        self.assertIn("request or PR authorship cannot authorize a recommendation", guide)
+        self.assertIn("Before merging a designation, renewal, or replacement", guide)
+        self.assertIn("review status, selection decision, rationale, and evidence", guide)
+        self.assertIn("pull request or repository maintainer notes", guide)
+        self.assertIn("do not add duplicate evidence fields to `listing.json`", guide)
+        self.assertIn(
+            "Complete and record the required review before setting `recommended: true` for publication.",
+            guide,
+        )
+        self.assertIn("Keep review evidence free of credentials and private details.", guide)
+        for evidence in (
+            "conformance review",
+            "representative task scenarios",
+            "Exact tool repository, distribution path, and full commit",
+            "specification and evaluation revisions",
+            "**PASS**",
+            "**SKIP** with a reason",
+            "environment and host versions",
+            "provider and model setup",
+            "inputs used",
+            "Expected outcomes and observed outcomes",
+            "scope and limitations",
+            "Missing evidence means pending review",
+            "They must meet the required review standard before promotion",
+            "They do not evaluate tool quality",
+            "Structural validation is not an authorization engine",
+        ):
+            self.assertIn(evidence, guide)
+        for action in ("Designate", "Renew", "Withdraw", "Replace"):
+            self.assertIn(f"- {action} only after maintainers", guide)
+        self.assertIn("flat taxonomy of stable IDs, labels, and scopes", guide)
+        self.assertIn("at most one primary category", guide)
+        self.assertIn("including a designation that needs review", guide)
+        self.assertIn("identity metadata, neither an installer nor certification", guide)
+        self.assertIn("not certification, guaranteed results", guide)
+        agents = (catalog_root / "AGENTS.md").read_text()
+        self.assertIn("normative maintainer curation and review standard", agents)
+        self.assertIn("`docs/maintainers.md`", agents)
+
+    def test_public_guidance_uses_roles_without_account_approval_links(self) -> None:
+        catalog_root = SCRIPT.parents[1]
+        paths = ("README.md", "AGENTS.md", "docs/VISION.md", "docs/maintainers.md",
+                 "contracts/catalog-source.v1.md", "contracts/discovery.v1.md", "site/README.md")
+        for relative in paths:
+            with self.subTest(file=relative):
+                text = (catalog_root / relative).read_text()
+                self.assertIn("maintainer", text.lower())
+                # Public repository identities are legitimate source references;
+                # profile links and account-identification policy are not.
+                self.assertNotRegex(text, r"https://github\.com/[^/\s)]+(?:\)|\s|$)")
+                self.assertNotRegex(text, r"https://api\.github\.com/repos/[^\s)]+/contributors")
+                self.assertNotRegex(text, r"Only [A-Z][a-z]+ or [A-Z][a-z]+")
+
+    def test_website_guidance_explains_effective_recommendations_and_filters(self) -> None:
+        catalog_root = SCRIPT.parents[1]
+        site = re.sub(r"\s+", " ", (catalog_root / "site" / "README.md").read_text())
+        for phrase in (
+            "flat `categories.json` taxonomy",
+            "primary `category`",
+            "conformance review and representative task scenarios",
+            "exact reviewed source revision",
+            "not certification, guaranteed outcomes, or proof of local readiness",
+            "“Recommended only” checkbox",
+            "unchecked by default",
+            "combines with the other filters",
+            "includes only effective recommendations",
+            "designations do not qualify",
+            "Clear filters resets it",
+            "with JavaScript disabled, all tools remain visible",
+        ):
+            self.assertIn(phrase, site)
+
+    def test_public_tool_sources_use_root_main_distributions(self) -> None:
         catalog_root = SCRIPT.parents[1]
         expected_repositories = {
             "home-assistant": "https://github.com/bkrabach/amplifier-smart-tool-home-assistant.git",
@@ -205,10 +282,10 @@ This repository does not make a response-time commitment.""",
             (entry / "source.json").write_text('{"repository": "https://example.test/tool.git"}')
             (entry / "SMART_TOOL.md").write_bytes(b"old manifest")
             (entry / "provenance.json").write_bytes(b'{"old": true}\n')
-            listing = b'{ "domain": "test-environments", "recommended": true }\r\n'
-            domains = b'{ "domains": [] }\r\n'
+            listing = b'{ "category": "test-environments", "recommended": true }\r\n'
+            categories = b'{ "categories": [] }\r\n'
             (entry / "listing.json").write_bytes(listing)
-            (root / "domains.json").write_bytes(domains)
+            (root / "categories.json").write_bytes(categories)
             errors = io.StringIO()
 
             with (
@@ -225,7 +302,7 @@ This repository does not make a response-time commitment.""",
             self.assertEqual((entry / "SMART_TOOL.md").read_bytes(), b"old manifest")
             self.assertEqual((entry / "provenance.json").read_bytes(), b'{"old": true}\n')
             self.assertEqual((entry / "listing.json").read_bytes(), listing)
-            self.assertEqual((root / "domains.json").read_bytes(), domains)
+            self.assertEqual((root / "categories.json").read_bytes(), categories)
             self.assertIn("ERROR tool: requested ref fetch failed", errors.getvalue())
 
     def test_successful_refresh_preserves_editorial_files_byte_for_byte(self) -> None:
@@ -235,14 +312,14 @@ This repository does not make a response-time commitment.""",
             entry.mkdir(parents=True)
             pointer = b'{"repository": "https://example.test/tool.git"}\n'
             listing = (
-                b'{ "domain": "test-environments", "recommended": true, '
+                b'{ "category": "test-environments", "recommended": true, '
                 b'"reviewed_source": {"repository": "https://example.test/tool.git", '
                 b'"path": ".", "commit": "' + b"a" * 40 + b'"} }\r\n'
             )
-            domains = b'{ "domains": [{"id":"test-environments","label":"Tests","scope":"Testing."}] }\r\n'
+            categories = b'{ "categories": [{"id":"test-environments","label":"Tests","scope":"Testing."}] }\r\n'
             (entry / "source.json").write_bytes(pointer)
             (entry / "listing.json").write_bytes(listing)
-            (root / "domains.json").write_bytes(domains)
+            (root / "categories.json").write_bytes(categories)
             prepared = refresh_manifests.PreparedSnapshot(
                 b"new manifest\n",
                 json.dumps({"source": {"commit": "b" * 40}}).encode(),
@@ -259,14 +336,14 @@ This repository does not make a response-time commitment.""",
             self.assertEqual((entry / "provenance.json").read_bytes(), prepared.provenance)
             self.assertEqual((entry / "source.json").read_bytes(), pointer)
             self.assertEqual((entry / "listing.json").read_bytes(), listing)
-            self.assertEqual((root / "domains.json").read_bytes(), domains)
+            self.assertEqual((root / "categories.json").read_bytes(), categories)
 
     def test_partial_refresh_preserves_editorial_files_for_all_entries(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_name:
             root = Path(temporary_name)
-            domains = b'{ "domains": [] }\r\n'
-            (root / "domains.json").write_bytes(domains)
-            listing = b'{ "domain": "test-environments", "recommended": false }\r\n'
+            categories = b'{ "categories": [] }\r\n'
+            (root / "categories.json").write_bytes(categories)
+            listing = b'{ "category": "test-environments", "recommended": false }\r\n'
             for slug in ("first", "second"):
                 entry = root / "tools" / slug
                 entry.mkdir(parents=True)
@@ -288,7 +365,7 @@ This repository does not make a response-time commitment.""",
                 status = refresh_manifests.refresh(root, 1)
 
             self.assertEqual(status, 1)
-            self.assertEqual((root / "domains.json").read_bytes(), domains)
+            self.assertEqual((root / "categories.json").read_bytes(), categories)
             for slug in ("first", "second"):
                 self.assertEqual((root / "tools" / slug / "listing.json").read_bytes(), listing)
             self.assertEqual((root / "tools" / "first" / "SMART_TOOL.md").read_bytes(), prepared.manifest)
@@ -302,10 +379,10 @@ This repository does not make a response-time commitment.""",
             entry = root / "tools" / "tool"
             entry.mkdir(parents=True)
             (entry / "source.json").write_text('{"repository": "https://example.test/tool.git"}')
-            listing = b'{ "domain": "test-environments", "recommended": false }\r\n'
-            domains = b'{ "domains": [] }\r\n'
+            listing = b'{ "category": "test-environments", "recommended": false }\r\n'
+            categories = b'{ "categories": [] }\r\n'
             (entry / "listing.json").write_bytes(listing)
-            (root / "domains.json").write_bytes(domains)
+            (root / "categories.json").write_bytes(categories)
             errors = io.StringIO()
 
             with (
@@ -325,7 +402,7 @@ This repository does not make a response-time commitment.""",
 
             self.assertEqual(status, 2)
             self.assertEqual((entry / "listing.json").read_bytes(), listing)
-            self.assertEqual((root / "domains.json").read_bytes(), domains)
+            self.assertEqual((root / "categories.json").read_bytes(), categories)
             self.assertIn("FATAL tool: snapshot output failed", errors.getvalue())
 
     def test_cache_fetches_a_repository_ref_once(self) -> None:

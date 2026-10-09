@@ -14,8 +14,8 @@ connects a small catalog to the tools' own descriptions. The person uses the sam
 in local Codex, Claude Code, GitHub Copilot CLI, and Amplifier sessions.
 Host permissions and execution environments remain visible differences.
 
-Contributors submit a source pointer in a folder for each tool, optionally with ordinary classification using an approved domain, `recommended: false`, and no reviewed source. Listing or contributing is not a recommendation nomination.
-The pointer identifies a repository, a revision, and a location inside it. Recommendation curation is separate: only Brian or Sam chooses the tool, domain, and source revision and initiates designations, renewals, replacements, and withdrawals; either one may decide. Contributors or agents may implement their explicit decision, not solicit authors' recommendation requests or infer authority from them. Domain additions and scope changes separately require their review and approval.
+Contributors submit a source pointer in a folder for each tool, optionally with ordinary classification using an approved category, `recommended: false`, and no reviewed source. Listing or contributing is not a recommendation nomination.
+The pointer identifies a repository, a revision, and a location inside it. Recommendation curation is separate: only catalog maintainers select tools, categories, and source revisions and initiate designations, renewals, replacements, and withdrawals. Contributors or agents implement explicit maintainer decisions, not creator promotion requests. Category additions, labels, and scopes require maintainer review.
 Tool authors own the manifest that explains when to select their tool and the
 help that explains how to invoke it.
 
@@ -55,6 +55,26 @@ difference, including the boundary between ordinary and model-backed commands.
 Repository content cannot authorize installation, spending, or changes to the
 person's environment. The host's authorization rules remain in force.
 
+### 6. **Recommendation is reviewed and revision-scoped.**
+
+Maintainers promote recommendations only with a conformance review and
+representative task scenarios, recording exact revisions, PASS/SKIP results,
+expected and observed outcomes, and scope limitations under the
+[maintainer guide](maintainers.md#required-review-standard). Metadata checks do
+not establish tool quality or completion of that review. Recommendation is
+editorial judgment, not certification, guaranteed outcomes, or local readiness.
+The taxonomy is flat, IDs are stable, each listing has at most one primary
+category, and each category has at most one designation, including stale ones.
+Source drift removes preference until deliberate maintainer renewal.
+Without recorded review evidence, initial choices remain ordinary classified
+listings, not recommendations or failed tools.
+
+### 7. **Review evidence is public and traceable.**
+
+Review records describe maintainer decisions and keep credentials and private
+details out of public evidence. Public source repository URLs and exact upstream
+snapshots remain traceable and unchanged.
+
 ## What this deliberately resists
 
 - Per-tool skills and independently written or maintained manifest copies.
@@ -74,5 +94,5 @@ person's environment. The host's authorization rules remain in force.
 
 ## Changelog
 
-- First draft from the reviewed catalog design and the steward's decisions.
-- 2026-10-07: Correct the process to reserve recommendation selection and initiation for Brian or Sam, rather than treating them as approvers of authors' nominations.
+- Initial draft of the catalog's folder-based discovery and source ownership principles.
+- 2026-10-09: Clarify role-based maintainer curation, evidence required before promotion, and category terminology.
