@@ -77,7 +77,7 @@ class CatalogCards(HTMLParser):
         self.labels: dict[str, str] = {}
         self.label_target: str | None = None
         self.elements: list[tuple[str, dict[str, str | None]]] = []
-        self.card_ancestors: dict[str, list[tuple[str, dict[str, str | None]]]] = {}
+        self.card_ancestors: dict[str, list[list[tuple[str, dict[str, str | None]]]]] = {}
         self.feed(document)
 
     def handle_starttag(self, tag: str, attributes: list[tuple[str, str | None]]) -> None:
@@ -95,15 +95,23 @@ class CatalogCards(HTMLParser):
             self.card = {
                 "slug": attrs["data-tool"],
                 "category": attrs.get("data-category"),
+                "recommended": attrs.get("data-recommended"),
                 "badges": [],
+                "ids": [],
                 "text": "",
+                "ancestors": list(self.elements[:-1]),
             }
             self.cards.append(self.card)
-            self.card_ancestors[attrs["data-tool"]] = list(self.elements[:-1])
-        elif tag in ("span", "summary") and self.card is not None:
-            classes = (attrs.get("class") or "").split()
-            if "recommendation" in classes:
-                self.card["badges"].append(classes)
+            self.card_ancestors.setdefault(attrs["data-tool"], []).append(
+                list(self.elements[:-1])
+            )
+        elif self.card is not None:
+            if attrs.get("id"):
+                self.card["ids"].append(attrs["id"])
+            if tag in ("span", "summary"):
+                classes = (attrs.get("class") or "").split()
+                if "recommendation" in classes:
+                    self.card["badges"].append(classes)
 
     def handle_endtag(self, tag: str) -> None:
         for index in range(len(self.elements) - 1, -1, -1):
@@ -501,8 +509,9 @@ class CatalogMetadataTests(unittest.TestCase):
         self.add_entry("a-ordinary", None)
         before = rendered_catalog(self.root)
         cards = CatalogCards(before).cards
-        self.assertEqual([card["slug"] for card in cards], ["tool", "a-ordinary"])
-        self.assertEqual(cards[0]["badges"], [["recommendation", "recommended"]])
+        self.assertEqual([card["slug"] for card in cards], ["tool", "tool", "a-ordinary"])
+        self.assertEqual(cards[0]["badges"], [])
+        self.assertEqual(cards[1]["badges"], [["recommendation", "recommended"]])
         listing_path = self.root / "tools" / "tool" / "listing.json"
         original = listing_path.read_bytes()
         provenance_path = self.root / "tools" / "tool" / "provenance.json"
@@ -544,7 +553,7 @@ class CatalogMetadataTests(unittest.TestCase):
             document,
         )
         self.assertIn('<label for="tool-sort">Sort by</label>', document)
-        self.assertIn('id="other-tools-heading">Tools</h2>', document)
+        self.assertIn('id="other-tools-heading">All tools</h2>', document)
         self.assertNotIn("Other tools", document)
         self.assertNotIn("Other tool order", document)
         self.assertNotIn("Not currently recommended", document)
@@ -554,12 +563,13 @@ class CatalogMetadataTests(unittest.TestCase):
                         "recommendation-disclosure", "What does Recommended mean?"):
             self.assertNotIn(removed, document)
         cards = CatalogCards(document).cards
-        self.assertEqual([card["slug"] for card in cards], ["tool", "ordinary"])
-        self.assertEqual(cards[0]["badges"], [["recommendation", "recommended"]])
-        self.assertEqual(cards[1]["badges"], [])
+        self.assertEqual([card["slug"] for card in cards], ["tool", "tool", "ordinary"])
+        self.assertEqual(cards[0]["badges"], [])
+        self.assertEqual(cards[1]["badges"], [["recommendation", "recommended"]])
+        self.assertEqual(cards[2]["badges"], [])
         self.assertTrue(any(
             tag == "section" and attrs.get("id") == "recommended-region"
-            for tag, attrs in CatalogCards(document).card_ancestors["tool"]
+            for tag, attrs in CatalogCards(document).card_ancestors["tool"][0]
         ))
 
     def test_recommended_badge_is_static_and_source_details_remain_optional(self) -> None:
@@ -574,9 +584,16 @@ class CatalogMetadataTests(unittest.TestCase):
         self.assertIn(f'Source commit: <code>{IDENTITY["commit"]}</code>', document)
         self.assertIn("Snapshot refreshed:", document)
         parsed = CatalogCards(document)
+        self.assertEqual([card["slug"] for card in parsed.cards], ["tool", "tool"])
+        self.assertEqual(parsed.cards[0]["badges"], [])
+        self.assertEqual(parsed.cards[1]["badges"], [["recommendation", "recommended"]])
+        self.assertEqual(
+            parsed.cards[1]["text"].replace("Recommended", ""),
+            parsed.cards[0]["text"],
+        )
         self.assertTrue(any(
             tag == "section" and attrs.get("id") == "recommended-region"
-            for tag, attrs in parsed.card_ancestors["tool"]
+            for tag, attrs in parsed.card_ancestors["tool"][0]
         ))
         card = parsed.cards[0]
         self.assertIn("Category: Test environments", card["text"])
@@ -661,7 +678,7 @@ class CatalogMetadataTests(unittest.TestCase):
             self.assertEqual((drifted / "tools" / slug / "listing.json").read_bytes(), original_listings[slug])
             self.assertTrue(any(
                 tag == "section" and attrs.get("id") == "other-tools"
-                for tag, attrs in parsed.card_ancestors[slug]
+                for tag, attrs in parsed.card_ancestors[slug][0]
             ))
 
     def test_real_catalog_renders_recorded_states_including_drift(self) -> None:
@@ -683,17 +700,14 @@ class CatalogMetadataTests(unittest.TestCase):
                 else "Category: Not yet classified"
             )
             expected_states[slug] = state
-            expected.append(
-                (
-                    state != "recommended",
-                    slug,
-                    {
-                        "slug": slug,
-                        "category": listing["category"] if listing else ("" if categories is not None else None),
-                        "badges": [["recommendation", state]] if state != "ordinary" else [],
-                    },
-                )
-            )
+            card = {
+                "slug": slug,
+                "category": listing["category"] if listing else ("" if categories is not None else None),
+                "badges": [["recommendation", state]] if state != "ordinary" else [],
+            }
+            if state == "recommended":
+                expected.append((False, slug, {**card, "badges": []}))
+            expected.append((state != "recommended", slug, card))
         document = rendered_catalog(ROOT)
         parsed = CatalogCards(document)
         cards = parsed.cards
@@ -708,23 +722,39 @@ class CatalogMetadataTests(unittest.TestCase):
         )
         recommended_slugs = {slug for ordinary, slug, _ in expected if not ordinary}
         self.assertEqual({card["slug"] for card in cards[:len(recommended_slugs)]}, recommended_slugs)
-        self.assertIn(f"{len(expected)} tools", document)
+        self.assertIn('<p class="catalog-count" id="result-count" role="status">22 tools</p>', document)
+        self.assertIn('<span class="catalog-count" id="other-count">22 tools</span>', document)
+        self.assertIn('<span class="catalog-count" id="recommended-count">2 tools</span>', document)
         self.assertEqual(len(cards), len(expected))
-        self.assertEqual(sum(bool(card["category"]) for card in cards), len(listings))
-        self.assertEqual(sum(card["category"] == "" for card in cards), len(expected) - len(listings))
+        self.assertEqual(sum(bool(card["category"]) for card in cards), len(listings) + len(recommended_slugs))
+        self.assertEqual(
+            sum(card["category"] == "" for card in cards),
+            len(expected) - len(listings) - len(recommended_slugs),
+        )
         self.assertEqual(len(expected_labels), 22)
         self.assertEqual(set(expected_labels), {card["slug"] for card in cards})
         self.assertEqual(recommended_slugs, set(CURRENT_SELECTIONS))
-        self.assertEqual(document.count('data-recommended="true"'), 2)
+        self.assertEqual(document.count('data-recommended="true"'), 4)
         self.assertEqual(document.count('data-recommended="false"'), 20)
         self.assertEqual(len({card["slug"] for card in cards}), 22)
         for card in cards:
             text = " ".join(card["text"].split())
             self.assertIn(expected_labels[card["slug"]], text)
             self.assertNotIn("Not currently recommended", text)
+            self.assertEqual(card["ids"], [])
+            self.assertEqual(
+                card["recommended"],
+                str(expected_states[card["slug"]] == "recommended").lower(),
+            )
             self.assertEqual(
                 card["badges"],
-                [["recommendation", expected_states[card["slug"]]]]
+                []
+                if expected_states[card["slug"]] == "recommended"
+                and any(
+                    tag == "section" and attrs.get("id") == "recommended-region"
+                    for tag, attrs in card["ancestors"]
+                )
+                else [["recommendation", expected_states[card["slug"]]]]
                 if expected_states[card["slug"]] != "ordinary"
                 else [],
             )
@@ -748,35 +778,49 @@ class CatalogMetadataTests(unittest.TestCase):
                 f'<option value="{identity}">{html.escape(category["label"], quote=True)}</option>'
             )
             self.assertIn(option, document)
+        featured_cards = []
+        all_tool_cards = []
+        group_members = Counter()
         for card in cards:
-            ancestors = parsed.card_ancestors[card["slug"]]
-            if card["slug"] in recommended_slugs:
-                self.assertTrue(any(
-                    tag == "section" and attrs.get("id") == "recommended-region"
-                    for tag, attrs in ancestors
-                ))
+            ancestors = card["ancestors"]
+            is_featured = any(
+                tag == "section" and attrs.get("id") == "recommended-region"
+                for tag, attrs in ancestors
+            )
+            if is_featured:
+                featured_cards.append(card)
+                self.assertIn(card["slug"], recommended_slugs)
+                self.assertEqual(card["badges"], [])
                 self.assertFalse(any(
                     tag == "section" and attrs.get("id") == "other-tools"
                     for tag, attrs in ancestors
                 ))
                 continue
+            all_tool_cards.append(card)
             self.assertTrue(any(
                 tag == "section" and attrs.get("id") == "other-tools"
                 for tag, attrs in ancestors
             ))
+            group = card["category"] or "__unclassified__"
             self.assertTrue(any(
-                tag == "section" and attrs.get("data-category-group") == (card["category"] or "__unclassified__")
+                tag == "section" and attrs.get("data-category-group") == group
                 for tag, attrs in ancestors
             ))
-        ordinary_groups = {
-            attrs["data-category-group"]
-            for card in cards if card["slug"] not in recommended_slugs
-            for tag, attrs in parsed.card_ancestors[card["slug"]]
-            if tag == "section" and "data-category-group" in attrs
-        }
-        self.assertEqual(ordinary_groups, set(categories) - {"test-environments", "smart-tool-development"})
-        for identity in ("test-environments", "smart-tool-development"):
-            self.assertNotIn(f'id="category-group-{identity}"', document)
+            group_members[group] += 1
+            if card["slug"] in recommended_slugs:
+                self.assertEqual(card["badges"], [["recommendation", "recommended"]])
+        self.assertEqual(len(featured_cards), 2)
+        self.assertEqual(len(all_tool_cards), 22)
+        self.assertEqual(len({card["slug"] for card in all_tool_cards}), 22)
+        self.assertEqual(
+            group_members,
+            Counter(listing["category"] for listing in listings.values()),
+        )
+        self.assertEqual(set(group_members), set(categories))
+        self.assertEqual(sum(group_members.values()), 22)
+        for identity in categories:
+            self.assertGreater(group_members[identity], 0)
+            self.assertIn(f'id="category-group-{identity}"', document)
 
 
 if __name__ == "__main__":

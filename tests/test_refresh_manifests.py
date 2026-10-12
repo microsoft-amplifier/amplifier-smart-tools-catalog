@@ -183,15 +183,16 @@ This repository does not make a response-time commitment.""",
             "maintainer-curated preference",
             "selected recorded source revision",
             "not certification, guaranteed outcomes, or proof of local readiness",
-            "Keep Recommended separate from Tools",
+            "Keep Recommended separate from All tools",
+            "all 22 unique listings stay visible in All tools",
+            "All tools counts report unique listings, not rendered card instances",
             "Hide the entire Recommended region when its effective matching count is zero",
             "Do not render a Recommended empty-state message, recommendation-specific details disclosure, or explanation link",
             "one control bar above all results",
-            "Search, category, and platform filter both regions",
-            "sorting changes Tools only",
+            "Search, category, and platform filter both copies",
+            "sorting changes All tools only",
             "clearing filters preserves the selected sort",
-            "category scopes remain in `categories.json`",
-            "all 22 server-rendered cards stay visible",
+            "Do not display category scope text or insert it on selection",
         ):
             self.assertIn(phrase, site)
 
@@ -199,7 +200,7 @@ This repository does not make a response-time commitment.""",
         self.assertIn("One control bar sits above all results", readme)
         self.assertIn(
             "Without JavaScript, the control bar and Name list stay hidden, all "
-            "server-rendered cards remain visible",
+            "22 unique listings remain visible in All tools alongside the two featured shortcuts",
             readme,
         )
 
