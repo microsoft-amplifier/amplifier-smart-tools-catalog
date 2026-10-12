@@ -183,15 +183,25 @@ This repository does not make a response-time commitment.""",
             "maintainer-curated preference",
             "selected recorded source revision",
             "not certification, guaranteed outcomes, or proof of local readiness",
-            "“Recommended only” checkbox",
-            "unchecked by default",
-            "combines with the other filters",
-            "includes only effective recommendations",
-            "designations do not qualify",
-            "Clear filters resets it",
-            "with JavaScript disabled, all tools remain visible",
+            "Keep Recommended separate from Other tools",
+            "Both section headings and counts remain visible",
+            "No Recommended tools match these filters",
+            "one control bar above both result sections",
+            "Search, category, and platform filter both sections",
+            "ordering changes Other tools only",
+            "clearing filters preserves the selected order",
+            "selected category's scope is shown as a short helper",
+            "all 22 server-rendered cards stay visible",
         ):
             self.assertIn(phrase, site)
+
+        readme = re.sub(r"\s+", " ", (catalog_root / "README.md").read_text())
+        self.assertIn("One control bar sits above both result sections", readme)
+        self.assertIn(
+            "Without JavaScript, the control bar and Name list stay hidden, while all "
+            "server-rendered cards remain visible",
+            readme,
+        )
 
     def test_public_tool_sources_use_root_main_distributions(self) -> None:
         catalog_root = SCRIPT.parents[1]
