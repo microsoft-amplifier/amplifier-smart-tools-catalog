@@ -14,8 +14,8 @@ connects a small catalog to the tools' own descriptions. The person uses the sam
 in local Codex, Claude Code, GitHub Copilot CLI, and Amplifier sessions.
 Host permissions and execution environments remain visible differences.
 
-Contributors submit a source pointer in a folder for each tool, optionally with ordinary classification using an approved category, `recommended: false`, and no reviewed source. Listing or contributing is not a recommendation nomination.
-The pointer identifies a repository, a revision, and a location inside it. Recommendation curation is separate: only catalog maintainers select tools, categories, and source revisions and initiate designations, renewals, replacements, and withdrawals. Contributors or agents implement explicit maintainer decisions, not creator promotion requests. Category additions, labels, and scopes require maintainer review.
+Contributors submit only a source pointer in a folder for each tool. Submissions are category-agnostic: submitters do not add, choose, or create categories or recommendations and need not know category definitions. Listing or contributing is not a recommendation nomination.
+The pointer identifies a repository, a revision, and a location inside it. Maintainers assign classification from the approved registry in separate metadata, never in upstream manifests or source pointers. A category-only listing defaults to not recommended without rewriting its file. Tools without classification automatically appear under Other and remain searchable by Name and Category; Other is a built-in fallback grouping, not a registry category. Recommendation curation is separate: only catalog maintainers select tools, categories, and source revisions and initiate designations, renewals, replacements, and withdrawals. Contributors or agents implement explicit maintainer decisions, not creator promotion requests. Category additions, labels, and scopes require separate maintainer review and approval.
 Tool authors own the manifest that explains when to select their tool and the
 help that explains how to invoke it.
 
@@ -85,3 +85,4 @@ Selection records describe maintainer decisions without claiming completed valid
 - Initial draft of the catalog's folder-based discovery and source ownership principles.
 - 2026-10-09: Clarify role-based maintainer curation, evidence required before promotion, and category terminology.
 - 2026-10-12: Separate maintainer-curated preference from validation evidence; source binding identifies a selected revision but does not demonstrate conformance or task outcomes.
+- 2026-10-12: Keep submissions source-only and category-agnostic; maintainer-owned classification uses an omitted recommendation default and a searchable Other fallback without changing the taxonomy.

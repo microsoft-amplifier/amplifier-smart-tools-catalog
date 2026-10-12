@@ -2,6 +2,8 @@
 
 This guide is normative for catalog recommendation decisions. Ordinary listing contributions follow [Contributing](../README.md#contributing); they are not recommendation nominations.
 
+Submissions are source-only and category-agnostic. Submitters do not add, choose, or create categories or recommendations and need not know category definitions. Maintainers assign classification from the approved registry in separate `listing.json` metadata, never in upstream manifests or source pointers.
+
 ## Roles and selection
 
 Only catalog maintainers select the tool, primary category, and source revision and initiate designations, renewals, replacements, and withdrawals. Maintainers select, initiate, and promote; they are not merely approvers of creators' promotion requests. Contributors or agents may edit recommendation metadata only to implement an explicit maintainer decision, not make the selection. A creator request or PR authorship cannot authorize a recommendation.
@@ -35,16 +37,15 @@ tool-specific category to evade the recommendation limit.
 
 Each classified listing has at most one primary category. At most one
 `recommended: true` designation may occupy a category, including a designation
-that needs review. Missing listing metadata keeps legacy entries available,
-not yet classified, and not recommended.
+that needs review. Missing listing metadata keeps entries available under Other and not recommended. Other is a built-in fallback grouping, not a registry category. Tools without classification automatically appear there and remain searchable by Name and Category; its filter option and group appear only when such entries exist. Without a registry, legacy rendering remains unchanged.
+
+The ordinary metadata form is `{"category": "test-environments"}`. `category` is required and unknown registry IDs are rejected. An omitted `recommended` defaults to false in memory without rewriting the file. A provided flag must be a strict boolean; true requires the full selected `reviewed_source`, while false or omission prohibits it. Neither false nor omission occupies a recommendation slot.
 
 ## Metadata procedures
 
 - Designate only after maintainers select the tool, category, and revision and initiate the designation; record `recommended: true` and the exact `reviewed_source`.
 - Renew only after maintainers select the revision and initiate renewal; update `reviewed_source` to its exact repository, distribution path, and full commit. Never advance the selected commit automatically.
-- Withdraw only after maintainers initiate withdrawal; set `recommended` to
-  false and remove `reviewed_source`. Keep the ordinary classified listing
-  unless its removal is separately justified. Record the decision and rationale.
+- Withdraw only after maintainers initiate withdrawal; remove `recommended` and `reviewed_source` to leave the category-only ordinary form. An explicit false flag is also valid. Keep the ordinary classified listing unless its removal is separately justified. Record the decision and rationale.
 - Replace only after maintainers select the replacement and initiate replacement; withdraw the old designation and add the new one in the same change. The one-designation-per-category limit still applies.
 
 `reviewed_source` is selected source identity metadata, neither an installer nor certification.

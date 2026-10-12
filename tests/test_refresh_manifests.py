@@ -41,8 +41,9 @@ class RefreshManifestsTests(unittest.TestCase):
         support = (catalog_root / "SUPPORT.md").read_text()
         workflow = (catalog_root / ".github" / "workflows" / "ci.yml").read_text()
 
-        self.assertIn("optional `tools/<slug>/listing.json`", readme)
-        self.assertIn('"recommended": false`, with no reviewed source', readme)
+        self.assertIn("Maintainer-owned optional `tools/<slug>/listing.json`", readme)
+        self.assertIn('{"category": "approved-id"}', readme)
+        self.assertIn("an omitted `recommended` defaults to false", readme)
         self.assertIn("Listing or contributing a tool is not a recommendation nomination.", readme)
         self.assertIn("Do not solicit recommendation requests or proposals from authors.", readme)
         self.assertIn("[maintainer guide](docs/maintainers.md)", readme)
@@ -91,10 +92,13 @@ This repository does not make a response-time commitment.""",
         readme = (catalog_root / "README.md").read_text()
         contribution = readme.split("## Contributing\n", 1)[1].split("### Check a contribution", 1)[0]
         self.assertIn("1. Add or update `tools/<slug>/source.json`", contribution)
-        self.assertIn("existing approved category", contribution)
-        self.assertIn('"recommended": false`, with no reviewed source', contribution)
-        self.assertNotIn("reviewed_source", contribution)
-        self.assertNotIn("recommended: true", contribution)
+        self.assertIn("only the source pointer", contribution)
+        self.assertIn("Submissions are category-agnostic", contribution)
+        self.assertIn("Submitters do not add, choose, or create categories or recommendations", contribution)
+        self.assertIn("Maintainers assign classification from the approved registry", contribution)
+        self.assertIn("Other", contribution)
+        for forbidden in ("listing.json", "reviewed_source", "recommended:", '"recommended"'):
+            self.assertNotIn(forbidden, contribution)
         for action in ("Designate", "Renew", "Withdraw", "Replace"):
             self.assertNotIn(f"- {action} only after", readme)
 
@@ -173,6 +177,20 @@ This repository does not make a response-time commitment.""",
                 self.assertNotRegex(text, r"https://github\.com/[^/\s)]+(?:\)|\s|$)")
                 self.assertNotRegex(text, r"https://api\.github\.com/repos/[^\s)]+/contributors")
                 self.assertNotRegex(text, r"Only [A-Z][a-z]+ or [A-Z][a-z]+")
+
+    def test_guidance_keeps_classification_maintainer_owned_and_other_a_fallback(self) -> None:
+        catalog_root = SCRIPT.parents[1]
+        for relative in ("README.md", "AGENTS.md", "docs/VISION.md", "docs/maintainers.md",
+                         "contracts/catalog-source.v1.md", "contracts/discovery.v1.md", "site/README.md"):
+            with self.subTest(file=relative):
+                text = re.sub(r"\s+", " ", (catalog_root / relative).read_text())
+                self.assertIn("category-agnostic", text)
+                self.assertIn("approved registry", text)
+                self.assertIn("Other", text)
+                self.assertIn("separate", text)
+                self.assertIn("approval", text)
+                self.assertNotIn("optional ordinary classification", text)
+                self.assertNotIn("recommended: false", text)
 
     def test_website_guidance_explains_effective_recommendations_and_filters(self) -> None:
         catalog_root = SCRIPT.parents[1]
@@ -370,7 +388,7 @@ This repository does not make a response-time commitment.""",
             root = Path(temporary_name)
             categories = b'{ "categories": [] }\r\n'
             (root / "categories.json").write_bytes(categories)
-            listing = b'{ "category": "test-environments", "recommended": false }\r\n'
+            listing = b'{ "category": "test-environments" }\r\n'
             for slug in ("first", "second"):
                 entry = root / "tools" / slug
                 entry.mkdir(parents=True)
@@ -406,7 +424,7 @@ This repository does not make a response-time commitment.""",
             entry = root / "tools" / "tool"
             entry.mkdir(parents=True)
             (entry / "source.json").write_text('{"repository": "https://example.test/tool.git"}')
-            listing = b'{ "category": "test-environments", "recommended": false }\r\n'
+            listing = b'{ "category": "test-environments" }\r\n'
             categories = b'{ "categories": [] }\r\n'
             (entry / "listing.json").write_bytes(listing)
             (root / "categories.json").write_bytes(categories)
@@ -431,6 +449,40 @@ This repository does not make a response-time commitment.""",
             self.assertEqual((entry / "listing.json").read_bytes(), listing)
             self.assertEqual((root / "categories.json").read_bytes(), categories)
             self.assertIn("FATAL tool: snapshot output failed", errors.getvalue())
+
+    def test_successful_refresh_preserves_actual_category_only_listing_bytes(self) -> None:
+        catalog_root = SCRIPT.parents[1]
+        with tempfile.TemporaryDirectory() as temporary_name:
+            root = Path(temporary_name)
+            before = {}
+            for listing_file in catalog_root.glob("tools/*/listing.json"):
+                if json.loads(listing_file.read_text()).get("recommended", False):
+                    continue
+                entry = root / "tools" / listing_file.parent.name
+                entry.mkdir(parents=True)
+                for name in ("listing.json", "source.json"):
+                    destination = entry / name
+                    destination.write_bytes((listing_file.parent / name).read_bytes())
+                    before[destination] = destination.read_bytes()
+                self.assertEqual(set(json.loads(listing_file.read_text())), {"category"})
+            registry = root / "categories.json"
+            registry.write_bytes((catalog_root / "categories.json").read_bytes())
+            before[registry] = registry.read_bytes()
+            prepared = refresh_manifests.PreparedSnapshot(b"generated fixture manifest", b"generated fixture provenance")
+            with (
+                patch.object(refresh_manifests, "prepare_snapshot", return_value=prepared),
+                redirect_stdout(io.StringIO()),
+            ):
+                self.assertEqual(refresh_manifests.refresh(root, 1), 0)
+            self.assertEqual(len(list(root.glob("tools/*/listing.json"))), 20)
+            for path, raw in before.items():
+                self.assertEqual(path.read_bytes(), raw)
+            from catalog_metadata import load_catalog_metadata
+            _, listings = load_catalog_metadata(root)
+            self.assertEqual(len(listings), 20)
+            self.assertTrue(all(not listing["recommended"] for listing in listings.values()))
+            for path, raw in before.items():
+                self.assertEqual(path.read_bytes(), raw)
 
     def test_cache_fetches_a_repository_ref_once(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_name:

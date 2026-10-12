@@ -26,6 +26,7 @@ from catalog_metadata import (
     read_json,
     read_snapshot,
     recommendation_state,
+    validate_listing,
     validate_pointer,
 )
 
@@ -172,6 +173,24 @@ class CatalogMetadataTests(unittest.TestCase):
         self.assertEqual(listings["tool"], LISTING)
         self.assertEqual(listings["alternative"], {"category": CATEGORY["id"], "recommended": False})
 
+    def test_category_only_normalizes_without_mutating_input_or_source_files(self) -> None:
+        original = {"category": CATEGORY["id"]}
+        normalized = validate_listing(original, {CATEGORY["id"]: CATEGORY})
+        self.assertEqual(normalized, {**original, "recommended": False})
+        self.assertIsNot(normalized, original)
+        self.assertEqual(original, {"category": CATEGORY["id"]})
+        self.assertEqual(recommendation_state({}, {}, original), "ordinary")
+        entry = self.add_entry("category-only", original)
+        paths = [self.root / "categories.json", *entry.iterdir()]
+        before = {path: path.read_bytes() for path in paths}
+        self.add_entry("explicit-false", {**original, "recommended": False})
+        _, listings = load_catalog_metadata(self.root)
+        self.assertEqual(listings["category-only"], normalized)
+        self.assertEqual(sum(listing["recommended"] for listing in listings.values()), 1)
+        rendered_catalog(self.root)
+        for path, raw in before.items():
+            self.assertEqual(path.read_bytes(), raw)
+
     def test_missing_metadata_preserves_legacy_catalog(self) -> None:
         (self.root / "categories.json").unlink()
         (self.root / "tools" / "tool" / "listing.json").unlink()
@@ -190,8 +209,40 @@ class CatalogMetadataTests(unittest.TestCase):
         _, listings = load_catalog_metadata(self.root)
         self.assertNotIn("new-tool", listings)
 
+    def test_source_only_tools_with_and_without_snapshots_render_under_other(self) -> None:
+        (self.root / "tools" / "tool" / "listing.json").unlink()
+        pending = self.add_entry("pending-snapshot", None)
+        (pending / "SMART_TOOL.md").unlink()
+        (pending / "provenance.json").unlink()
+        before = {path: path.read_bytes() for path in self.root.rglob("*") if path.is_file()}
+        document = rendered_catalog(self.root)
+        cards = CatalogCards(document).cards
+        self.assertEqual({card["slug"] for card in cards}, {"tool", "pending-snapshot"})
+        self.assertEqual(len(cards), 2)
+        for card in cards:
+            self.assertIn("Category: Other", card["text"])
+            self.assertEqual(card["category"], "")
+            self.assertEqual(card["recommended"], "false")
+            self.assertEqual(card["badges"], [])
+            self.assertTrue(any(
+                attrs.get("id") == "category-group-unclassified" and "hidden" not in attrs
+                for tag, attrs in card["ancestors"] if tag == "section"
+            ))
+        self.assertIn('<option value="__unclassified__">Other</option>', document)
+        self.assertIn('<h3 id="category-heading-unclassified"><span>Other</span>', document)
+        self.assertIn('id="category-group-count-unclassified">2 tools</span>', document)
+        self.assertIn('id="result-count" role="status">2 tools</p>', document)
+        self.assertIn('id="recommended-region" aria-labelledby="recommended-heading" hidden>', document)
+        self.assertNotIn("Not yet classified", document)
+        self.assertIn("No manifest snapshot is available yet.", document)
+        self.assertIn("pending snapshot", document)
+        self.assertEqual(load_catalog_metadata(self.root), ({CATEGORY["id"]: CATEGORY}, {}))
+        for path, raw in before.items():
+            self.assertEqual(path.read_bytes(), raw)
+        self.assertEqual({path for path in self.root.rglob("*") if path.is_file()}, set(before))
+
     def test_unknown_category_and_listing_without_registry_fail(self) -> None:
-        write_json(self.root / "tools" / "tool" / "listing.json", {**LISTING, "category": "self-awarded"})
+        write_json(self.root / "tools" / "tool" / "listing.json", {"category": "self-awarded"})
         with self.assertRaisesRegex(ValueError, "category"):
             load_catalog_metadata(self.root)
         write_json(self.root / "tools" / "tool" / "listing.json", LISTING)
@@ -234,7 +285,7 @@ class CatalogMetadataTests(unittest.TestCase):
                     load_catalog_metadata(self.root)
 
     def test_listing_types_and_required_fields_fail(self) -> None:
-        invalid = [[], None, True, {}, {"category": CATEGORY["id"]}, {"recommended": True}]
+        invalid = [[], None, True, {}, {"recommended": True}]
         for bad in (None, "true", 1, 0, [], {}):
             invalid.append({**LISTING, "recommended": bad})
         for bad in (None, False, 7, "", [], {}):
@@ -253,6 +304,7 @@ class CatalogMetadataTests(unittest.TestCase):
             {**LISTING, "review_evidence": "https://example.test/review"},
             {**LISTING, "review_status": "passed"},
             {"category": CATEGORY["id"], "recommended": False, "reviewed_source": IDENTITY},
+            {"category": CATEGORY["id"], "reviewed_source": IDENTITY},
         ):
             with self.subTest(value=value):
                 write_json(self.root / "tools" / "tool" / "listing.json", value)
@@ -388,6 +440,11 @@ class CatalogMetadataTests(unittest.TestCase):
                 if slug in CURRENT_SELECTIONS:
                     expected_listing["reviewed_source"] = CURRENT_SELECTIONS[slug]
                 self.assertEqual(listings.get(slug), expected_listing)
+                raw_listing = read_json(ROOT / "tools" / slug / "listing.json", ROOT)
+                self.assertEqual(
+                    raw_listing,
+                    expected_listing if slug in CURRENT_SELECTIONS else {"category": category},
+                )
         self.assertEqual(sum(listing["recommended"] for listing in listings.values()), 2)
         self.assertEqual(sum(not listing["recommended"] for listing in listings.values()), 20)
         counts = Counter(listings[slug]["category"] for slug in expected_assignments)
@@ -526,7 +583,7 @@ class CatalogMetadataTests(unittest.TestCase):
         self.assertEqual(by_slug["tool"]["badges"], [["recommendation", "needs-review"]])
         self.assertIn("Category: Test environments", by_slug["tool"]["text"])
         self.assertIn("Recommendation needs review", by_slug["tool"]["text"])
-        self.assertIn("Category: Not yet classified", by_slug["a-ordinary"]["text"])
+        self.assertIn("Category: Other", by_slug["a-ordinary"]["text"])
         self.assertNotIn("Not currently recommended", after)
         self.assertNotIn('class="recommendation recommended"', after)
         self.assertIn("Recommendation needs review", after)
@@ -623,10 +680,10 @@ class CatalogMetadataTests(unittest.TestCase):
         unclassified = by_slug[unclassified_slug]
         self.assertEqual(unclassified["category"], "")
         self.assertEqual(unclassified["badges"], [])
-        self.assertIn("Category: Not yet classified", unclassified["text"])
+        self.assertIn("Category: Other", unclassified["text"])
         self.assertNotIn("Not currently recommended", document)
         self.assertIn(
-            'value="__unclassified__">Not yet classified',
+            'value="__unclassified__">Other',
             document,
         )
         self.assertIn("2 tools", document)
@@ -697,7 +754,7 @@ class CatalogMetadataTests(unittest.TestCase):
             expected_labels[slug] = (
                 f"Category: {categories[listing['category']]['label']}"
                 if listing
-                else "Category: Not yet classified"
+                else "Category: Other"
             )
             expected_states[slug] = state
             card = {
