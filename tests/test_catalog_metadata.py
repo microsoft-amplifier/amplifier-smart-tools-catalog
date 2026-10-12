@@ -77,17 +77,11 @@ class CatalogCards(HTMLParser):
         self.labels: dict[str, str] = {}
         self.label_target: str | None = None
         self.elements: list[tuple[str, dict[str, str | None]]] = []
-        self.text_runs: list[tuple[str, list[tuple[str, dict[str, str | None]]]]] = []
         self.card_ancestors: dict[str, list[tuple[str, dict[str, str | None]]]] = {}
-        self.guide_heading: dict[str, object] | None = None
-        self.in_guide_heading = False
         self.feed(document)
 
     def handle_starttag(self, tag: str, attributes: list[tuple[str, str | None]]) -> None:
         attrs = dict(attributes)
-        if tag == "summary" and attrs.get("id") == "recommendation-guide-title":
-            self.guide_heading = {"tag": tag, "attrs": attrs, "ancestors": list(self.elements), "text": ""}
-            self.in_guide_heading = True
         if tag not in ("area", "base", "br", "col", "embed", "hr", "img", "input",
                        "link", "meta", "param", "source", "track", "wbr"):
             self.elements.append((tag, attrs))
@@ -112,8 +106,6 @@ class CatalogCards(HTMLParser):
                 self.card["badges"].append(classes)
 
     def handle_endtag(self, tag: str) -> None:
-        if tag == "summary":
-            self.in_guide_heading = False
         for index in range(len(self.elements) - 1, -1, -1):
             if self.elements[index][0] == tag:
                 del self.elements[index:]
@@ -124,11 +116,8 @@ class CatalogCards(HTMLParser):
             self.label_target = None
 
     def handle_data(self, data: str) -> None:
-        self.text_runs.append((data, list(self.elements)))
         if self.card is not None:
             self.card["text"] += data
-        if self.in_guide_heading and self.guide_heading is not None:
-            self.guide_heading["text"] += data
         if self.label_target:
             self.labels[self.label_target] += data
 
@@ -528,12 +517,11 @@ class CatalogMetadataTests(unittest.TestCase):
         self.assertEqual(by_slug["tool"]["badges"], [["recommendation", "needs-review"]])
         self.assertIn("Category: Test environments", by_slug["tool"]["text"])
         self.assertIn("Recommendation needs review", by_slug["tool"]["text"])
-        self.assertNotIn("Not currently recommended", by_slug["tool"]["text"])
         self.assertIn("Category: Not yet classified", by_slug["a-ordinary"]["text"])
-        self.assertIn("Not currently recommended", by_slug["a-ordinary"]["text"])
+        self.assertNotIn("Not currently recommended", after)
         self.assertNotIn('class="recommendation recommended"', after)
         self.assertIn("Recommendation needs review", after)
-        self.assertIn("No recommendation preference applies.", after)
+        self.assertNotIn("No recommendation preference applies.", after)
         self.assertEqual(listing_path.read_bytes(), original)
 
     def test_one_shared_filter_bar_precedes_both_result_regions(self) -> None:
@@ -547,81 +535,45 @@ class CatalogMetadataTests(unittest.TestCase):
         self.assertLess(recommended, other)
         self.assertEqual(document.count('id="clear-filters"'), 1)
         self.assertIn('id="catalog-filters" hidden', document)
-        self.assertIn('aria-describedby="category-scope"', document)
-        self.assertIn('id="category-scope" hidden></p>', document)
+        self.assertIn('<select id="category">', document)
+        self.assertNotIn("category-scope", document)
+        self.assertNotIn("aria-describedby", document)
+        self.assertNotIn("data-scope", document)
         self.assertIn(
-            'value="__unclassified__" data-scope="Tools without an assigned primary category.">',
+            'value="__unclassified__">',
             document,
         )
-        self.assertIn(
-            "Search, category and platform filter both sections. Ordering changes Other tools only.",
-            document,
-        )
+        self.assertIn('<label for="tool-sort">Sort by</label>', document)
+        self.assertIn('id="other-tools-heading">Tools</h2>', document)
+        self.assertNotIn("Other tools", document)
+        self.assertNotIn("Other tool order", document)
+        self.assertNotIn("Not currently recommended", document)
+        self.assertNotIn("No Recommended tools match these filters", document)
         for removed in ("recommended-only", "show-all-tools", "category-navigation",
-                        "data-category-filter"):
+                        "data-category-filter", "recommendation-guide",
+                        "recommendation-disclosure", "What does Recommended mean?"):
             self.assertNotIn(removed, document)
         cards = CatalogCards(document).cards
         self.assertEqual([card["slug"] for card in cards], ["tool", "ordinary"])
         self.assertEqual(cards[0]["badges"], [["recommendation", "recommended"]])
-        self.assertEqual(cards[1]["badges"], [["recommendation", "ordinary"]])
-
-    def test_recommended_disclosure_explains_recorded_revision_and_limits(self) -> None:
-        document = rendered_catalog(self.root)
-        self.assertIn('<details class="recommendation-disclosure">', document)
-        self.assertIn('<summary class="recommendation recommended">Recommended</summary>', document)
-        self.assertIn(
-            "Recommended tools are maintainer-selected starting points at recorded revisions, "
-            "not quality certification.",
-            document,
-        )
-        self.assertIn('<details class="recommendation-guide">', document)
-        self.assertIn(
-            '<summary id="recommendation-guide-title">What does Recommended mean?</summary>',
-            document,
-        )
-        self.assertIn('href="#recommendation-guide-title">What does Recommended mean?</a>', document)
-        self.assertIn(f'<code>{IDENTITY["commit"]}</code>', document)
-        self.assertIn(
-            "This selection is not certification or a claim that conformance or task outcomes were checked.",
-            document,
-        )
-        # Readiness is explained separately, not implied by the selection badge.
-        self.assertIn("A listing does not establish installation or usability in your environment.", document)
-        self.assertIn("It can inspect the manifest, check the local environment", document)
-        discovery = " ".join((ROOT / "contracts" / "discovery.v1.md").read_text().split())
-        self.assertIn("Readiness states stay distinct.", discovery)
-        self.assertIn("It does not report a blocked or untested capability as ready.", discovery)
-        parsed = CatalogCards(document)
-        heading = parsed.guide_heading
-        self.assertIsNotNone(heading)
-        self.assertEqual(heading["text"].strip(), "What does Recommended mean?")
-        self.assertTrue(any(
-            tag == "details" and "recommendation-guide" in (attrs.get("class") or "")
-            for tag, attrs in heading["ancestors"]
-        ))
+        self.assertEqual(cards[1]["badges"], [])
         self.assertTrue(any(
             tag == "section" and attrs.get("id") == "recommended-region"
-            and attrs.get("aria-labelledby") == "recommended-heading"
-            for tag, attrs in heading["ancestors"]
+            for tag, attrs in CatalogCards(document).card_ancestors["tool"]
         ))
-        guide_runs = [
-            (text, ancestors) for text, ancestors in parsed.text_runs
-            if any(tag == "details" and "recommendation-guide" in (attrs.get("class") or "")
-                   for tag, attrs in ancestors)
-        ]
-        for _, ancestors in guide_runs:
-            for tag, attrs in ancestors:
-                if tag == "details":
-                    self.assertIn("recommendation-guide", attrs.get("class", ""))
-        context = " ".join(" ".join(text for text, _ in guide_runs).split())
-        for explanation in (
-            "Maintainers select a preferred starting point for a category",
-            "at a recorded source revision",
-            "This is not a quality certification",
-            "A snapshot refresh does not renew the designation",
-        ):
-            self.assertIn(explanation, context)
-        self.assertNotIn("after checking specification conformance", context)
+
+    def test_recommended_badge_is_static_and_source_details_remain_optional(self) -> None:
+        document = rendered_catalog(self.root)
+        self.assertIn('<span class="recommendation recommended">Recommended</span>', document)
+        self.assertNotIn('<details class="recommendation-disclosure">', document)
+        self.assertNotIn('<details class="recommendation-guide">', document)
+        self.assertNotIn('href="#recommendation-guide-title"', document)
+        self.assertNotIn("What does Recommended mean?", document)
+        self.assertNotIn("Not currently recommended", document)
+        self.assertIn('<details><summary>Full description and source</summary>', document)
+        self.assertIn(f'Source commit: <code>{IDENTITY["commit"]}</code>', document)
+        self.assertIn("Snapshot refreshed:", document)
+        parsed = CatalogCards(document)
         self.assertTrue(any(
             tag == "section" and attrs.get("id") == "recommended-region"
             for tag, attrs in parsed.card_ancestors["tool"]
@@ -630,7 +582,7 @@ class CatalogMetadataTests(unittest.TestCase):
         self.assertIn("Category: Test environments", card["text"])
         self.assertNotIn("Not currently recommended", card["text"])
 
-    def test_digital_twin_fixture_renders_category_and_ordinary_status(self) -> None:
+    def test_digital_twin_fixture_renders_category_without_ordinary_badge(self) -> None:
         pinned = self.root / "pinned"
         write_json(pinned / "categories.json", read_json(ROOT / "categories.json", ROOT))
         slug = "digital-twin-universe"
@@ -649,17 +601,15 @@ class CatalogMetadataTests(unittest.TestCase):
         by_slug = {card["slug"]: card for card in cards}
         dtu = by_slug[slug]
         self.assertEqual(dtu["category"], "test-environments")
-        self.assertEqual(dtu["badges"], [["recommendation", "ordinary"]])
         self.assertIn("Category: Test environments", dtu["text"])
-        self.assertIn("Not currently recommended", dtu["text"])
+        self.assertEqual(dtu["badges"], [])
         unclassified = by_slug[unclassified_slug]
         self.assertEqual(unclassified["category"], "")
-        self.assertEqual(unclassified["badges"], [["recommendation", "ordinary"]])
+        self.assertEqual(unclassified["badges"], [])
         self.assertIn("Category: Not yet classified", unclassified["text"])
-        self.assertIn("Not currently recommended", unclassified["text"])
+        self.assertNotIn("Not currently recommended", document)
         self.assertIn(
-            'value="__unclassified__" data-scope="Tools without an assigned primary category.">'
-            'Not yet classified',
+            'value="__unclassified__">Not yet classified',
             document,
         )
         self.assertIn("2 tools", document)
@@ -667,10 +617,9 @@ class CatalogMetadataTests(unittest.TestCase):
         self.assertEqual(document.count('data-recommended="true"'), 0)
         self.assertEqual(document.count('data-recommended="false"'), 2)
         self.assertIn('id="recommended-count">0 tools</span>', document)
-        self.assertIn(
-            'id="recommended-empty" hidden>No Recommended tools match these filters.</p>',
-            document,
-        )
+        self.assertIn('id="recommended-region" aria-labelledby="recommended-heading" hidden>', document)
+        self.assertNotIn("recommended-empty", document)
+        self.assertNotIn("No Recommended tools match these filters", document)
         self.assertNotIn("No tools are currently designated Recommended.", document)
 
     def test_empty_catalog_retains_zero_recommendation_state(self) -> None:
@@ -681,10 +630,10 @@ class CatalogMetadataTests(unittest.TestCase):
         self.assertIn("0 tools", document)
         self.assertIn('id="recommended-count">0 tools</span>', document)
         self.assertIn('id="other-count">0 tools</span>', document)
-        self.assertIn(
-            'id="recommended-empty" hidden>No Recommended tools match these filters.</p>',
-            document,
-        )
+        self.assertIn('id="recommended-region" aria-labelledby="recommended-heading" hidden>', document)
+        self.assertNotIn("recommended-empty", document)
+        self.assertNotIn("No Recommended tools match these filters", document)
+        self.assertNotIn("No tools match these filters.", document)
         self.assertNotIn('data-recommended="true"', document)
         self.assertNotIn('value="__unclassified__"', document)
 
@@ -741,11 +690,7 @@ class CatalogMetadataTests(unittest.TestCase):
                     {
                         "slug": slug,
                         "category": listing["category"] if listing else ("" if categories is not None else None),
-                        "badges": (
-                            [["recommendation", "ordinary"]]
-                            if state == "ordinary"
-                            else [["recommendation", state]]
-                        ),
+                        "badges": [["recommendation", state]] if state != "ordinary" else [],
                     },
                 )
             )
@@ -776,11 +721,20 @@ class CatalogMetadataTests(unittest.TestCase):
         for card in cards:
             text = " ".join(card["text"].split())
             self.assertIn(expected_labels[card["slug"]], text)
+            self.assertNotIn("Not currently recommended", text)
             self.assertEqual(
-                "Not currently recommended" in text,
-                expected_states[card["slug"]] == "ordinary",
+                card["badges"],
+                [["recommendation", expected_states[card["slug"]]]]
+                if expected_states[card["slug"]] != "ordinary"
+                else [],
             )
-        self.assertIn('id="category-scope" hidden></p>', document)
+        self.assertNotIn("category-scope", document)
+        self.assertNotIn("data-scope", document)
+        self.assertNotIn("Other tools", document)
+        self.assertNotIn("Other tool order", document)
+        self.assertNotIn("Not currently recommended", document)
+        self.assertNotIn("What does Recommended mean?", document)
+        self.assertNotIn("No Recommended tools match these filters", document)
         category_start = document.index('<select id="category"')
         category_end = document.index('</select>', category_start)
         category_select = document[category_start:category_end]
@@ -791,8 +745,7 @@ class CatalogMetadataTests(unittest.TestCase):
         self.assertNotIn("data-category-filter", document)
         for identity, category in categories.items():
             option = (
-                f'<option value="{identity}" data-scope="{html.escape(category["scope"], quote=True)}">'
-                f'{html.escape(category["label"], quote=True)}</option>'
+                f'<option value="{identity}">{html.escape(category["label"], quote=True)}</option>'
             )
             self.assertIn(option, document)
         for card in cards:

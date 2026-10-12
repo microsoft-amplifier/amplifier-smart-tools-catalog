@@ -183,22 +183,22 @@ This repository does not make a response-time commitment.""",
             "maintainer-curated preference",
             "selected recorded source revision",
             "not certification, guaranteed outcomes, or proof of local readiness",
-            "Keep Recommended separate from Other tools",
-            "Both section headings and counts remain visible",
-            "No Recommended tools match these filters",
-            "one control bar above both result sections",
-            "Search, category, and platform filter both sections",
-            "ordering changes Other tools only",
-            "clearing filters preserves the selected order",
-            "selected category's scope is shown as a short helper",
+            "Keep Recommended separate from Tools",
+            "Hide the entire Recommended region when its effective matching count is zero",
+            "Do not render a Recommended empty-state message, recommendation-specific details disclosure, or explanation link",
+            "one control bar above all results",
+            "Search, category, and platform filter both regions",
+            "sorting changes Tools only",
+            "clearing filters preserves the selected sort",
+            "category scopes remain in `categories.json`",
             "all 22 server-rendered cards stay visible",
         ):
             self.assertIn(phrase, site)
 
         readme = re.sub(r"\s+", " ", (catalog_root / "README.md").read_text())
-        self.assertIn("One control bar sits above both result sections", readme)
+        self.assertIn("One control bar sits above all results", readme)
         self.assertIn(
-            "Without JavaScript, the control bar and Name list stay hidden, while all "
+            "Without JavaScript, the control bar and Name list stay hidden, all "
             "server-rendered cards remain visible",
             readme,
         )
