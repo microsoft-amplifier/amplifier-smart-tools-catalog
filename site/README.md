@@ -73,32 +73,17 @@ remain available.
 
 Each card shows its “Category: {label}” prefix and explicit recommendation state. Ordinary listings show “Not currently recommended”; cards without listings show “Category: Not yet classified” with the same neutral status. Effective recommendations and designations needing review retain their existing explicit labels.
 
-The current data classifies all 22 tools across nine categories, with zero
-unclassified tools and zero effective recommendations. The seven category
-additions and ordinary assignments are proposed for maintainer review, not
-already approved. See the root [category table](../README.md#categories-and-recommendations)
-for coverage; category scopes remain in `categories.json`. Missing classification
-is still valid for future source-pointer contributions, not an expected gap in
-the current 22-tool inventory.
+The current data classifies all 22 tools across nine categories: two effective recommendations, 20 ordinary listings, and zero unclassified tools. The seven category additions and assignments are proposed for maintainer review, not already approved. See the root [category table](../README.md#categories-and-recommendations) for coverage; category scopes remain in `categories.json`. Missing classification is still valid for future source-pointer contributions, not an expected gap in the current 22-tool inventory.
 
-Explain “Recommended” as a maintainer-selected tool for a category at an exact
-reviewed source revision after conformance review and representative task
-scenarios under the [maintainer guide](../docs/maintainers.md). It is not
-certification, guaranteed outcomes, or proof of local readiness. Catalog metadata
-tests do not establish tool quality or completion of that review.
+Explain “Recommended” as a maintainer-curated preference for a category at a selected recorded source revision under the [maintainer guide](../docs/maintainers.md). It is not certification, guaranteed outcomes, or proof of local readiness. Catalog metadata tests do not establish tool quality or completed evaluation.
 
-Provide a “Recommended only” checkbox alongside search, platform, and primary
-category filters. It is unchecked by default, combines with the other filters,
-and includes only effective recommendations. “Recommendation needs review”
-designations do not qualify. Clear filters resets it; with JavaScript disabled,
-all tools remain visible. Keep the explainer and checkbox accessible.
+Provide a “Recommended only” checkbox alongside search, platform, and primary category filters. It is unchecked by default, combines with the other filters, and includes only effective recommendations. “Recommendation needs review” designations do not qualify. Clear filters resets it; with JavaScript disabled, all tools remain visible. Keep the explainer and checkbox accessible.
 
-Show the recorded reviewed revision separately from snapshot provenance and
-refresh time. Source drift removes recommendation preference without removing
-the category or listing. The stale designation still occupies its category's
-slot. Digital Twin Universe and Smart Tool Creator remain ordinary classified
-listings with `recommended: false` and no `reviewed_source`, pending recorded
-review evidence. This is not a negative quality judgment.
+Show the selected recorded revision separately from snapshot provenance and refresh time. Retain the `reviewed_source` field name for schema compatibility: it records selected source identity, not proof of conformance or task results. Source drift removes recommendation preference without removing the category or listing. The stale designation still occupies its category's slot. Digital Twin Universe and Smart Tool Creator are effective recommendations for Test environments and Smart Tool development respectively.
+
+Render those two cards once each in Recommended before Other tools. Group the remaining 20 ordinary listings into seven populated categories without duplicating Recommended cards. Keep all nine category navigation entries; recommendation-only categories link to Recommended. Every card retains its category label.
+
+The “Sort tools” control (`tool-sort`) defaults to Category. Name shows ordinary tools alphabetically by their displayed manifest names in one flat list; Category restores their groups. Recommended remains a separate region in either mode. Search, platform, category, and Recommended only filters still apply, and sorting does not duplicate cards or change their category labels.
 
 Keep review evidence free of credentials and private details. Preserve public
 source URLs and exact generated manifests. Implement shared rendering and

@@ -31,7 +31,7 @@ from catalog_metadata import (
 
 CATEGORY = {"id": "test-environments", "label": "Test environments", "scope": "Isolated testing."}
 IDENTITY = {"repository": "https://example.test/tool.git", "path": ".", "commit": "a" * 40}
-# Synthetic reviewed metadata is test-only, never evidence of an actual review.
+# Synthetic source identity is test-only, never evidence of an actual evaluation.
 LISTING = {"category": CATEGORY["id"], "recommended": True, "reviewed_source": IDENTITY}
 # These 22 manifest-based assignments cover the current classification proposal.
 # New sources may remain unclassified: this is not a mandatory-listing schema.
@@ -45,6 +45,18 @@ CURRENT_CLASSIFICATIONS = {
     "workplace-productivity": ("gmail", "workiq"),
     "music-listening": ("music-deck", "spotify"),
     "home-automation": ("home-assistant",),
+}
+CURRENT_SELECTIONS = {
+    "digital-twin-universe": {
+        "repository": "https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe.git",
+        "path": ".",
+        "commit": "a4915ad2ce0846ea4221fb264e2557aa2463d1ed",
+    },
+    "smart-tool-creator": {
+        "repository": "https://github.com/microsoft/amplifier-smart-tool-creator.git",
+        "path": ".",
+        "commit": "a101e6f17ef86135393d105919d00522fcf59c55",
+    },
 }
 
 
@@ -317,7 +329,7 @@ class CatalogMetadataTests(unittest.TestCase):
         self.assertEqual(registry_file.read_bytes(), registry_before)
         self.assertNotEqual(old_review, before)
 
-    def test_current_22_tools_have_exact_classifications_without_reviewed_sources(self) -> None:
+    def test_current_22_tools_keep_nine_categories_and_two_selected_sources(self) -> None:
         expected_categories = {
             "test-environments": (
                 "Test environments",
@@ -370,10 +382,16 @@ class CatalogMetadataTests(unittest.TestCase):
         categories, listings = load_catalog_metadata(ROOT)
         self.assertEqual(set(categories), set(expected_categories))
         sources = {source.parent.name for source in catalog_sources(ROOT)}
-        self.assertLessEqual(set(expected_assignments), sources)
+        self.assertEqual(set(expected_assignments), sources)
+        self.assertEqual(set(listings), sources)
         for slug, category in expected_assignments.items():
             with self.subTest(tool=slug):
-                self.assertEqual(listings.get(slug), {"category": category, "recommended": False})
+                expected_listing = {"category": category, "recommended": slug in CURRENT_SELECTIONS}
+                if slug in CURRENT_SELECTIONS:
+                    expected_listing["reviewed_source"] = CURRENT_SELECTIONS[slug]
+                self.assertEqual(listings.get(slug), expected_listing)
+        self.assertEqual(sum(listing["recommended"] for listing in listings.values()), 2)
+        self.assertEqual(sum(not listing["recommended"] for listing in listings.values()), 20)
         counts = Counter(listings[slug]["category"] for slug in expected_assignments)
         self.assertEqual(
             counts,
@@ -389,6 +407,22 @@ class CatalogMetadataTests(unittest.TestCase):
                 "home-automation": 1,
             },
         )
+
+    def test_selected_sources_match_current_main_snapshots_and_versions(self) -> None:
+        _, listings = load_catalog_metadata(ROOT)
+        versions = {"digital-twin-universe": "0.5.3", "smart-tool-creator": "0.3.0"}
+        for slug, identity in CURRENT_SELECTIONS.items():
+            with self.subTest(tool=slug):
+                entry = ROOT / "tools" / slug
+                pointer = validate_pointer(read_json(entry / "source.json", ROOT))
+                manifest, provenance = read_snapshot(entry, ROOT)
+                self.assertEqual(pointer["repository"], identity["repository"])
+                self.assertEqual(pointer["ref"], "main")
+                self.assertEqual(pointer["path"], ".")
+                self.assertEqual(provenance["source"], {**identity, "ref": "main"})
+                self.assertEqual(str(manifest["version"]), versions[slug])
+                self.assertEqual(recommendation_state(pointer, provenance, listings[slug], bool(manifest)),
+                                 "recommended")
 
     def test_real_classifications_remain_valid_metadata_after_snapshot_refresh(self) -> None:
         seed_root = self.root / "seeds"
@@ -409,7 +443,8 @@ class CatalogMetadataTests(unittest.TestCase):
             pointer = read_json(seed_root / "tools" / slug / "source.json", seed_root)
             manifest, provenance = read_snapshot(seed_root / "tools" / slug, seed_root)
             self.assertEqual(
-                recommendation_state(pointer, provenance, listings[slug], bool(manifest)), "ordinary"
+                recommendation_state(pointer, provenance, listings[slug], bool(manifest)),
+                "needs-review" if slug in CURRENT_SELECTIONS else "ordinary",
             )
             self.assertEqual(listing_file.read_bytes(), before)
 
@@ -515,7 +550,16 @@ class CatalogMetadataTests(unittest.TestCase):
         self.assertIn('<details class="recommendation-disclosure">', document)
         self.assertIn('<summary class="recommendation recommended">Recommended</summary>', document)
         self.assertIn(f'<code>{IDENTITY["commit"]}</code>', document)
-        self.assertIn("Not certification or proof of host readiness.", document)
+        self.assertIn(
+            "This selection is not certification or a claim that conformance or task outcomes were checked.",
+            document,
+        )
+        # Readiness is explained separately, not implied by the selection badge.
+        self.assertIn("A listing does not establish installation or usability in your environment.", document)
+        self.assertIn("It can inspect the manifest, check the local environment", document)
+        discovery = " ".join((ROOT / "contracts" / "discovery.v1.md").read_text().split())
+        self.assertIn("Readiness states stay distinct.", discovery)
+        self.assertIn("It does not report a blocked or untested capability as ready.", discovery)
         parsed = CatalogCards(document)
         heading = parsed.guide_heading
         self.assertIsNotNone(heading)
@@ -541,15 +585,16 @@ class CatalogMetadataTests(unittest.TestCase):
                 self.assertNotEqual(attrs.get("aria-hidden"), "true")
         context = " ".join(" ".join(text for text, _ in guide_runs).split())
         for explanation in (
-            "Maintainers designate a starting point",
-            "checking specification conformance",
-            "documenting representative-task evidence and limitations at a recorded source revision",
-            "not certification, a quality guarantee, or proof of readiness in your environment",
+            "Catalog maintainers selected this tool as a preferred starting point for its category",
+            "at the recorded source revision",
+            "Selection is not certification or a claim that specification conformance or task outcomes were checked",
+            "Any review results and scope limitations are stated only when recorded",
             "Compare documented capabilities, platforms, and prerequisites with your task",
             "suitable alternatives remain available",
             "A missing designation means no current recommendation is recorded, not a negative quality judgment",
         ):
             self.assertIn(explanation, context)
+        self.assertNotIn("after checking specification conformance", context)
         self.assertTrue(any(
             tag == "section" and attrs.get("id") == "recommended-region"
             for tag, attrs in parsed.card_ancestors["tool"]
@@ -567,6 +612,8 @@ class CatalogMetadataTests(unittest.TestCase):
         for filename in ("source.json", "listing.json", "provenance.json", "SMART_TOOL.md"):
             (target_entry / filename).parent.mkdir(parents=True, exist_ok=True)
             (target_entry / filename).write_bytes((source_entry / filename).read_bytes())
+        # Isolate the ordinary/zero-recommendation case from the live selections.
+        write_json(target_entry / "listing.json", {"category": "test-environments", "recommended": False})
         unclassified_slug = "a-unclassified"
         write_json(pinned / "tools" / unclassified_slug / "source.json", {"repository": IDENTITY["repository"]})
         document = rendered_catalog(pinned)
@@ -588,6 +635,43 @@ class CatalogMetadataTests(unittest.TestCase):
         self.assertIn("Test environments", document)
         self.assertEqual(document.count('data-recommended="true"'), 0)
         self.assertEqual(document.count('data-recommended="false"'), 2)
+        self.assertIn("No tools are currently designated Recommended.", document)
+
+    def test_empty_catalog_retains_zero_recommendation_state(self) -> None:
+        empty = self.root / "empty"
+        write_json(empty / "categories.json", {"categories": [CATEGORY]})
+        document = rendered_catalog(empty)
+        self.assertEqual(CatalogCards(document).cards, [])
+        self.assertIn("0 tools", document)
+        self.assertIn("No tools are currently designated Recommended.", document)
+        self.assertNotIn('data-recommended="true"', document)
+
+    def test_both_selected_sources_lose_preference_on_drift_without_renewal(self) -> None:
+        drifted = self.root / "drifted"
+        write_json(drifted / "categories.json", read_json(ROOT / "categories.json", ROOT))
+        original_listings = {}
+        for slug in CURRENT_SELECTIONS:
+            entry = drifted / "tools" / slug
+            entry.mkdir(parents=True)
+            for name in ("source.json", "listing.json", "provenance.json", "SMART_TOOL.md"):
+                (entry / name).write_bytes((ROOT / "tools" / slug / name).read_bytes())
+            original_listings[slug] = (entry / "listing.json").read_bytes()
+            provenance = read_json(entry / "provenance.json", drifted)
+            provenance["source"]["commit"] = "b" * 40
+            write_json(entry / "provenance.json", provenance)
+        document = rendered_catalog(drifted)
+        parsed = CatalogCards(document)
+        self.assertEqual({card["slug"] for card in parsed.cards}, set(CURRENT_SELECTIONS))
+        self.assertEqual(len(parsed.cards), 2)
+        self.assertNotIn('data-recommended="true"', document)
+        for card in parsed.cards:
+            slug = card["slug"]
+            self.assertEqual(card["badges"], [["recommendation", "needs-review"]])
+            self.assertEqual((drifted / "tools" / slug / "listing.json").read_bytes(), original_listings[slug])
+            self.assertTrue(any(
+                tag == "section" and attrs.get("id") == "other-tools"
+                for tag, attrs in parsed.card_ancestors[slug]
+            ))
 
     def test_real_catalog_renders_recorded_states_including_drift(self) -> None:
         # Refresh may advance live snapshots without renewing editorial review.
@@ -643,7 +727,10 @@ class CatalogMetadataTests(unittest.TestCase):
         self.assertEqual(sum(card["category"] == "" for card in cards), len(expected) - len(listings))
         self.assertEqual(len(expected_labels), 22)
         self.assertEqual(set(expected_labels), {card["slug"] for card in cards})
-        self.assertNotIn('data-recommended="true"', document)
+        self.assertEqual(recommended_slugs, set(CURRENT_SELECTIONS))
+        self.assertEqual(document.count('data-recommended="true"'), 2)
+        self.assertEqual(document.count('data-recommended="false"'), 20)
+        self.assertEqual(len({card["slug"] for card in cards}), 22)
         for card in cards:
             text = " ".join(card["text"].split())
             self.assertIn(expected_labels[card["slug"]], text)
@@ -661,8 +748,20 @@ class CatalogMetadataTests(unittest.TestCase):
         for identity, category in categories.items():
             self.assertIn(category["label"], tiles[identity])
             self.assertIn(category["scope"], tiles[identity])
+            count = sum(card["category"] == identity for card in cards)
+            self.assertIn(f"{count} {'tool' if count == 1 else 'tools'}", tiles[identity])
         for card in cards:
             ancestors = parsed.card_ancestors[card["slug"]]
+            if card["slug"] in recommended_slugs:
+                self.assertTrue(any(
+                    tag == "section" and attrs.get("id") == "recommended-region"
+                    for tag, attrs in ancestors
+                ))
+                self.assertFalse(any(
+                    tag == "section" and attrs.get("id") == "other-tools"
+                    for tag, attrs in ancestors
+                ))
+                continue
             self.assertTrue(any(
                 tag == "section" and attrs.get("id") == "other-tools"
                 for tag, attrs in ancestors
@@ -671,6 +770,21 @@ class CatalogMetadataTests(unittest.TestCase):
                 tag == "section" and attrs.get("data-category-group") == (card["category"] or "__unclassified__")
                 for tag, attrs in ancestors
             ))
+        ordinary_groups = {
+            attrs["data-category-group"]
+            for card in cards if card["slug"] not in recommended_slugs
+            for tag, attrs in parsed.card_ancestors[card["slug"]]
+            if tag == "section" and "data-category-group" in attrs
+        }
+        self.assertEqual(ordinary_groups, set(categories) - {"test-environments", "smart-tool-development"})
+        for identity in ("test-environments", "smart-tool-development"):
+            self.assertNotIn(f'id="category-group-{identity}"', document)
+            label = categories[identity]["label"]
+            self.assertTrue(any(
+                label in text and any(tag == "a" and attrs.get("href") == "#recommended-region"
+                                      for tag, attrs in ancestors)
+                for text, ancestors in parsed.text_runs
+            ), f"{label} must link to Recommended when it has no ordinary cards")
 
 
 if __name__ == "__main__":

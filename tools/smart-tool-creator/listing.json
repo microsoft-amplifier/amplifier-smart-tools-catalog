@@ -1,4 +1,9 @@
 {
   "category": "smart-tool-development",
-  "recommended": false
+  "recommended": true,
+  "reviewed_source": {
+    "repository": "https://github.com/microsoft/amplifier-smart-tool-creator.git",
+    "path": ".",
+    "commit": "a101e6f17ef86135393d105919d00522fcf59c55"
+  }
 }

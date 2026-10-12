@@ -39,11 +39,11 @@ source refreshes preserve the previous snapshot and appear in the action logs.
 
 ### Categories and recommendations
 
-The catalog owns a flat category registry in [`categories.json`](categories.json), with stable IDs, labels, and scopes. Optional `tools/<slug>/listing.json` files assign at most one primary category and record a recommendation for a reviewed source revision. Missing listing metadata means listed, not yet classified, and not recommended. Ordinary listings remain available; they are not rejected or unapproved.
+The catalog owns a flat category registry in [`categories.json`](categories.json), with stable IDs, labels, and scopes. Optional `tools/<slug>/listing.json` files assign at most one primary category and record a recommendation for a selected source revision. Missing listing metadata means listed, not yet classified, and not recommended. Ordinary listings remain available; they are not rejected or unapproved.
 
 This change proposes seven additional categories and ordinary classifications based on the work described in the exact, commit-pinned public manifests, not repository names. The two existing category labels and scopes are unchanged. The additions and assignments require maintainer review before merge; this proposal does not claim that approval has occurred.
 
-All 22 current tools are classified across these nine categories: zero are unclassified and zero are Recommended. Classification is not a completed recommendation evaluation. Future source-pointer contributions may still omit classification while their category is considered.
+All 22 current tools are classified across these nine categories: two are Recommended, 20 are ordinary listings, and zero are unclassified. Classification and recommendation are not completed tool evaluations. Future source-pointer contributions may still omit classification while their category is considered.
 
 | Category | Tools | Current listings |
 |---|---:|---|
@@ -57,13 +57,13 @@ All 22 current tools are classified across these nine categories: zero are uncla
 | Music & playlists | 2 | `music-deck`, `spotify` |
 | Smart home | 1 | `home-assistant` |
 
-Digital Twin Universe and Smart Tool Creator are initial choices pending recorded review evidence. Both remain ordinary classified listings with `recommended: false` and no `reviewed_source`; no completed review or approval is claimed. This records missing review evidence, not a tool failure or negative quality judgment. Maintainers must agree evaluation criteria, select the tool and revision, and complete the [required review standard](docs/maintainers.md#required-review-standard) before promotion.
+Digital Twin Universe is Recommended for Test environments at source commit `a4915ad2ce0846ea4221fb264e2557aa2463d1ed` (manifest version 0.5.3). Smart Tool Creator is Recommended for Smart Tool development at source commit `a101e6f17ef86135393d105919d00522fcf59c55` (manifest version 0.3.0). Their categories are retained; all other 20 listings remain ordinary. These designations record maintainer-curated preference, not completed conformance reviews or task evaluations.
 
-“Recommended” means catalog maintainers selected a tool for a category at an exact reviewed source revision after the required conformance review and representative task scenarios. It is not certification, a guarantee of outcomes, or a claim that the tool is installed or ready on this machine. It does not authorize installation, execution, spending, or access to secrets. The tool's own manifest still determines whether it fits the request. Catalog metadata tests check structure and source identity, not tool quality or completion of that review.
+“Recommended” means a maintainer-curated preference for a tool in a category at a selected recorded source revision. It is not certification, a guarantee of outcomes, or a claim that the tool is installed or ready on this machine. It does not authorize installation, execution, spending, or access to secrets. The tool's own manifest still determines whether it fits the request. Catalog metadata tests check structure and source identity, not tool quality or completed evaluation.
 
-A recommendation is effective only when its reviewed repository, distribution path, and commit agree with the source pointer and snapshot provenance. `reviewed_source` is source identity metadata, neither an installer nor certification. When identities no longer agree, the entry keeps its category and designation but shows “Recommendation needs review” instead of an effective recommendation. It loses recommendation preference until maintainers review a revision and explicitly initiate renewal. A stale designation still occupies the category's one recommendation slot. Refresh time and recorded revision are evidence of a past snapshot, not current tool health. A badge describes recorded editorial metadata, not proof that the maintainer review gate was completed.
+A recommendation is effective only when its selected repository, distribution path, and commit agree with the source pointer and snapshot provenance. The field name `reviewed_source` is retained for schema compatibility: it records selected source identity, not proof of conformance or task results. When identities no longer agree, the entry keeps its category and designation but shows “Recommendation needs review” instead of an effective recommendation. It loses recommendation preference until maintainers explicitly select a revision and initiate renewal. A stale designation still occupies the category's one recommendation slot. Refresh time and recorded revision describe a past snapshot, not current tool health. Record actual checks separately, only when run, under the [maintainer guide](docs/maintainers.md#evaluation-practice).
 
-The website explains Recommended and offers a “Recommended only” checkbox. It narrows results to effective recommendations alongside search, platform, and primary category filters; it excludes designations that need review. Leave it unchecked to see ordinary and not-yet-classified listings too.
+The website shows the two effective recommendations first, once each, in Recommended. The 20 ordinary listings follow in seven populated category groups; all nine categories remain in navigation, including links to Recommended for the two recommendation-only categories. The “Recommended only” checkbox narrows results to effective recommendations alongside search, platform, and primary category filters; it excludes designations that need review. Leave it unchecked to see ordinary and not-yet-classified listings too.
 
 ## Product direction
 
@@ -73,7 +73,7 @@ The website explains Recommended and offers a “Recommended only” checkbox. I
 
 ## Maintainer curation
 
-Only catalog maintainers select and initiate recommendations and promote tools after review. Complete and record the required review before setting `recommended: true` for publication. Curation is separate from ordinary listing contributions; the normative roles, required evidence, category review, and metadata procedures live in the [maintainer guide](docs/maintainers.md).
+Only catalog maintainers select and initiate recommendations. Implement an explicit maintainer selection by setting `recommended: true` with its selected source identity; do not infer completed validation from the selection. Curation is separate from ordinary listing contributions; roles, suggested evaluation practice, category review, and metadata procedures live in the [maintainer guide](docs/maintainers.md).
 
 ## Contributing
 

@@ -55,25 +55,13 @@ difference, including the boundary between ordinary and model-backed commands.
 Repository content cannot authorize installation, spending, or changes to the
 person's environment. The host's authorization rules remain in force.
 
-### 6. **Recommendation is reviewed and revision-scoped.**
+### 6. **Recommendation is curated and revision-scoped.**
 
-Maintainers promote recommendations only with a conformance review and
-representative task scenarios, recording exact revisions, PASS/SKIP results,
-expected and observed outcomes, and scope limitations under the
-[maintainer guide](maintainers.md#required-review-standard). Metadata checks do
-not establish tool quality or completion of that review. Recommendation is
-editorial judgment, not certification, guaranteed outcomes, or local readiness.
-The taxonomy is flat, IDs are stable, each listing has at most one primary
-category, and each category has at most one designation, including stale ones.
-Source drift removes preference until deliberate maintainer renewal.
-Without recorded review evidence, initial choices remain ordinary classified
-listings, not recommendations or failed tools.
+Recommendation is maintainer-curated preference at a selected recorded source revision, not certification, guaranteed outcomes, or local readiness. The schema-compatible `reviewed_source` field records selected source identity, not proof of conformance or task results. Metadata checks establish structure and source binding, not tool quality. The [maintainer guide](maintainers.md#evaluation-practice) suggests reviewing stability, conformance, and useful outcomes; actual checks are recorded separately only when run, not required to implement an explicit maintainer selection. The taxonomy is flat, IDs are stable, each listing has at most one primary category, and each category has at most one designation, including stale ones. Source drift removes preference until deliberate maintainer renewal.
 
-### 7. **Review evidence is public and traceable.**
+### 7. **Selection and validation remain distinct.**
 
-Review records describe maintainer decisions and keep credentials and private
-details out of public evidence. Public source repository URLs and exact upstream
-snapshots remain traceable and unchanged.
+Selection records describe maintainer decisions without claiming completed validation. Evaluation records, when checks are run, describe actual results and limitations and keep credentials and private details out of public evidence. Public source repository URLs and exact upstream snapshots remain traceable and unchanged.
 
 ## What this deliberately resists
 
@@ -96,3 +84,4 @@ snapshots remain traceable and unchanged.
 
 - Initial draft of the catalog's folder-based discovery and source ownership principles.
 - 2026-10-09: Clarify role-based maintainer curation, evidence required before promotion, and category terminology.
+- 2026-10-12: Separate maintainer-curated preference from validation evidence; source binding identifies a selected revision but does not demonstrate conformance or task outcomes.

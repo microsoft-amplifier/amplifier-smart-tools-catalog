@@ -48,13 +48,13 @@ class RefreshManifestsTests(unittest.TestCase):
         self.assertIn("[maintainer guide](docs/maintainers.md)", readme)
         self.assertIn("Only catalog maintainers select and initiate recommendations", readme)
         self.assertIn(
-            "Complete and record the required review before setting `recommended: true` for publication.",
+            "Implement an explicit maintainer selection by setting `recommended: true`",
             readme,
         )
-        self.assertIn("initial choices pending recorded review evidence", readme)
-        self.assertIn("Both remain ordinary classified listings", readme)
-        self.assertIn("not a tool failure or negative quality judgment", readme)
-        self.assertIn("no completed review or approval is claimed", readme)
+        self.assertIn("two are Recommended, 20 are ordinary listings", readme)
+        self.assertIn("zero are unclassified", readme)
+        self.assertIn("maintainer-curated preference", readme)
+        self.assertIn("not completed conformance reviews or task evaluations", readme)
         self.assertIn("not certification", readme)
         self.assertNotIn("source pointers only", readme)
         self.assertIn("generated `SMART_TOOL.md`", readme)
@@ -98,7 +98,7 @@ This repository does not make a response-time commitment.""",
         for action in ("Designate", "Renew", "Withdraw", "Replace"):
             self.assertNotIn(f"- {action} only after", readme)
 
-    def test_maintainer_guide_requires_revision_scoped_review_evidence_before_merge(self) -> None:
+    def test_maintainer_guide_separates_selection_from_actual_evaluation(self) -> None:
         catalog_root = SCRIPT.parents[1]
         guide = re.sub(r"\s+", " ", (catalog_root / "docs" / "maintainers.md").read_text())
         self.assertIn("This guide is normative", guide)
@@ -107,16 +107,15 @@ This repository does not make a response-time commitment.""",
         self.assertIn("to implement an explicit maintainer decision, not make the selection", guide)
         self.assertIn("request or PR authorship cannot authorize a recommendation", guide)
         self.assertIn("Before merging a designation, renewal, or replacement", guide)
-        self.assertIn("review status, selection decision, rationale, and evidence", guide)
+        self.assertIn("selection decision, category, and exact selected source identity", guide)
         self.assertIn("pull request or repository maintainer notes", guide)
         self.assertIn("do not add duplicate evidence fields to `listing.json`", guide)
         self.assertIn(
-            "Complete and record the required review before setting `recommended: true` for publication.",
+            "Implement an explicit maintainer selection without imposing a new conformance or task-evaluation gate.",
             guide,
         )
         self.assertIn("Keep review evidence free of credentials and private details.", guide)
         for evidence in (
-            "conformance review",
             "representative task scenarios",
             "Exact tool repository, distribution path, and full commit",
             "specification and evaluation revisions",
@@ -126,9 +125,10 @@ This repository does not make a response-time commitment.""",
             "provider and model setup",
             "inputs used",
             "Expected outcomes and observed outcomes",
-            "scope and limitations",
-            "Missing evidence means pending review",
-            "They must meet the required review standard before promotion",
+            "Scope and limitations",
+            "not prerequisites to implementing an explicit maintainer selection",
+            "Record actual checks separately only when run",
+            "not proof of conformance or task results",
             "They do not evaluate tool quality",
             "Structural validation is not an authorization engine",
         ):
@@ -138,11 +138,27 @@ This repository does not make a response-time commitment.""",
         self.assertIn("flat taxonomy of stable IDs, labels, and scopes", guide)
         self.assertIn("at most one primary category", guide)
         self.assertIn("including a designation that needs review", guide)
-        self.assertIn("identity metadata, neither an installer nor certification", guide)
+        self.assertIn("source identity metadata, neither an installer nor certification", guide)
         self.assertIn("not certification, guaranteed results", guide)
         agents = (catalog_root / "AGENTS.md").read_text()
-        self.assertIn("normative maintainer curation and review standard", agents)
+        self.assertIn("normative maintainer curation policy and suggested evaluation practice", agents)
         self.assertIn("`docs/maintainers.md`", agents)
+
+    def test_public_guidance_defines_preference_without_claiming_validation(self) -> None:
+        catalog_root = SCRIPT.parents[1]
+        for relative in ("README.md", "AGENTS.md", "docs/VISION.md", "docs/maintainers.md",
+                         "contracts/catalog-source.v1.md", "contracts/discovery.v1.md", "site/README.md"):
+            with self.subTest(file=relative):
+                text = re.sub(r"\s+", " ", (catalog_root / relative).read_text())
+                self.assertIn("maintainer-curated preference", text.lower())
+                self.assertIn("selected recorded source revision", text)
+                self.assertRegex(text, r"schema(?:-| )compatib(?:le|ility)")
+                if relative == "AGENTS.md":
+                    self.assertIn("not proof of validation", text)
+                else:
+                    self.assertIn("not proof of conformance or task results", text)
+                self.assertNotIn("initial choices pending recorded review evidence", text)
+                self.assertNotIn("required review before setting `recommended: true`", text)
 
     def test_public_guidance_uses_roles_without_account_approval_links(self) -> None:
         catalog_root = SCRIPT.parents[1]
@@ -164,8 +180,8 @@ This repository does not make a response-time commitment.""",
         for phrase in (
             "flat `categories.json` taxonomy",
             "primary `category`",
-            "conformance review and representative task scenarios",
-            "exact reviewed source revision",
+            "maintainer-curated preference",
+            "selected recorded source revision",
             "not certification, guaranteed outcomes, or proof of local readiness",
             "“Recommended only” checkbox",
             "unchecked by default",
